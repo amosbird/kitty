@@ -500,6 +500,11 @@ update_modifier_state_on_modifier_key_event(GLFWkeyevent *ev, int key_modifier, 
 static void
 key_callback(GLFWwindow *w, GLFWkeyevent *ev) {
     if (!set_callback_window(w)) return;
+    if (ev->key == 0) {
+        if (is_window_ready_for_callbacks())
+            on_key_input(ev);
+        return;
+    }
 #ifndef __APPLE__
     bool is_left;
     int key_modifier = key_to_modifier(ev->key, &is_left);
