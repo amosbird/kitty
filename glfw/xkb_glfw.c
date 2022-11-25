@@ -965,6 +965,10 @@ glfw_xkb_handle_key_event(_GLFWwindow *window, _GLFWXKBData *xkb, xkb_keycode_t 
     ibus_ev.window_id = window->id;
     ibus_ev.ibus_keysym = syms[0];
     if (ibus_process_key(&ibus_ev, &xkb->ibus)) {
+        // Fake key to trigger on_key_input to update IME position
+        glfw_ev.key = 0;
+        glfw_ev.native_key_id = 0;
+        _glfwInputKeyboard(window, &glfw_ev);
         debug("↳ to IBUS: keycode: 0x%x keysym: 0x%x (%s) %s\n", ibus_ev.ibus_keycode, ibus_ev.ibus_keysym, glfw_xkb_keysym_name(ibus_ev.ibus_keysym), format_mods(ibus_ev.glfw_ev.mods));
     } else {
         _glfwInputKeyboard(window, &glfw_ev);
