@@ -214,6 +214,11 @@ on_key_input(GLFWkeyevent *ev) {
             debug("invalid state, ignoring\n");
             return;
     }
+
+    if (ev->key == 0) {
+        return;
+    }
+
     bool dispatch_ok = true, consumed = false;
 #define dispatch_key_event(name) { \
     PyObject *ke = NULL, *ret = NULL; \
