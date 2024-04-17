@@ -299,6 +299,10 @@ func main(_ *cli.Command, o *Options, args []string) (rc int, err error) {
 	}
 
 	lp.OnText = func(text string, _, _ bool) error {
+		if text == "\x1d" {
+			lp.Quit(0)
+			return nil
+		}
 		changed := false
 		for _, ch := range text {
 			if strings.ContainsRune(alphabet, ch) {
