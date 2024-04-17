@@ -31,6 +31,13 @@ func HoldTillEnter(start_with_newline bool) {
 		return ""
 	}
 
+	lp.OnText = func(text string, _, _ bool) error {
+		if text == "\x1d" {
+			lp.Quit(0)
+		}
+		return nil
+	}
+
 	lp.OnKeyEvent = func(event *loop.KeyEvent) error {
 		if event.MatchesPressOrRepeat("enter") || event.MatchesPressOrRepeat("kp_enter") || event.MatchesPressOrRepeat("esc") || event.MatchesPressOrRepeat("ctrl+c") || event.MatchesPressOrRepeat("ctrl+d") {
 			event.Handled = true
