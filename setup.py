@@ -1307,8 +1307,8 @@ def build_static_kittens(
         e = os.environ.copy()
         # https://github.com/kovidgoyal/kitty/issues/6051#issuecomment-1441369828
         e.pop('PWD', None)
+        e['CGO_ENABLED'] = '0'
         if for_platform:
-            e['CGO_ENABLED'] = '0'
             e['GOOS'] = for_platform[0]
             e['GOARCH'] = for_platform[1]
         elif args.building_arch:
