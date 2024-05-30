@@ -618,6 +618,9 @@ def _launch(
                         x = s
                 elif x == '@active-kitty-window-id':
                     x = str(active.id)
+                elif x == '@cmdline':
+                    if active_child.foreground_cmdline:
+                        x = ' '.join(active_child.foreground_cmdline)
                 elif x == '@input-line-number':
                     if 'input_line_number' in pipe_data:
                         x = str(pipe_data['input_line_number'])
