@@ -1447,14 +1447,7 @@ class Boss:
                 km.keymap[SingleKey(mods=mods, key=ord(ch.lower()))].append(ac)
                 if ch in string.digits:
                     km.keymap[SingleKey(mods=mods, key=fmap[f'KP_{ch}'])].append(ac)
-        if len(self.current_visual_select.window_ids) > 1:
-            self.mappings._push_keyboard_mode(km)
-            # redirect_mouse_handling(True)
-            # self.mouse_handler = self.visual_window_select_mouse_handler
-        else:
-            self.visual_window_select_action_trigger(self.current_visual_select.window_ids[0] if self.current_visual_select.window_ids else 0)
-            if get_options().enable_audio_bell:
-                ring_bell()
+        self.mappings._push_keyboard_mode(km)
 
     def visual_window_select_action_trigger(self, window_id: int = 0) -> None:
         if self.current_visual_select:
