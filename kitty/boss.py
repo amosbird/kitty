@@ -1432,9 +1432,6 @@ class Boss:
         if initial_os_window_id != tab.os_window_id:
             focus_os_window(tab.os_window_id, True)
         self.current_visual_select = VisualSelect(tab.id, tab.os_window_id, initial_tab_id, initial_os_window_id, choose_msg, callback, reactivate_prev_tab)
-        if tab.current_layout.only_active_window_visible:
-            self.select_window_in_tab_using_overlay(tab, choose_msg, only_window_ids)
-            return
         km = KeyboardMode('__visual_select__')
         km.on_action = 'end'
         fmap = get_name_to_functional_number_map()
