@@ -1439,6 +1439,9 @@ class Boss:
         km.on_action = 'end'
         fmap = get_name_to_functional_number_map()
         alphanumerics = get_options().visual_window_select_characters
+        wid = tab.active_window.id if tab.active_window else 1
+        km.keymap[SingleKey(mods=GLFW_MOD_CONTROL, key=ord('c'))].append(KeyDefinition(definition=f'visual_window_select_action_trigger {wid}'))
+        km.keymap[SingleKey(key=57344)].append(KeyDefinition(definition=f'visual_window_select_action_trigger {wid}'))
         for idx, window in tab.windows.iter_windows_with_number(only_visible=True):
             if only_window_ids and window.id not in only_window_ids:
                 continue
@@ -1446,7 +1449,7 @@ class Boss:
             if idx >= len(alphanumerics):
                 break
             ch = alphanumerics[idx]
-            window.screen.set_window_char(ch)
+            window.screen.set_window_char(' ')
             self.current_visual_select.window_ids.append(window.id)
             for mods in (0, GLFW_MOD_CONTROL, GLFW_MOD_CONTROL | GLFW_MOD_SHIFT, GLFW_MOD_SUPER, GLFW_MOD_ALT, GLFW_MOD_SHIFT):
                 km.keymap[SingleKey(mods=mods, key=ord(ch.lower()))].append(ac)
@@ -1454,8 +1457,8 @@ class Boss:
                     km.keymap[SingleKey(mods=mods, key=fmap[f'KP_{ch}'])].append(ac)
         if len(self.current_visual_select.window_ids) > 1:
             self.mappings._push_keyboard_mode(km)
-            redirect_mouse_handling(True)
-            self.mouse_handler = self.visual_window_select_mouse_handler
+            # redirect_mouse_handling(True)
+            # self.mouse_handler = self.visual_window_select_mouse_handler
         else:
             self.visual_window_select_action_trigger(self.current_visual_select.window_ids[0] if self.current_visual_select.window_ids else 0)
             if get_options().enable_audio_bell:
