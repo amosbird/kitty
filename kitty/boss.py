@@ -2024,7 +2024,7 @@ class Boss:
                 s.shutdown(socket.SHUT_RDWR)
             s.close()
 
-    def display_scrollback(self, window: Window, data: bytes | str, input_line_number: int = 0, title: str = '', report_cursor: bool = True) -> None:
+    def display_scrollback(self, window: Window, data: bytes | str, input_line_number: int = 0, title: str = '', report_cursor: bool = True, pager: list[str] = []) -> None:
 
         def prepare_arg(x: str) -> str:
             x = x.replace('INPUT_LINE_NUMBER', str(input_line_number))
@@ -2032,7 +2032,10 @@ class Boss:
             x = x.replace('CURSOR_COLUMN', str(window.screen.cursor.x + 1) if report_cursor else '0')
             return x
 
-        cmd = list(map(prepare_arg, get_options().scrollback_pager))
+        if not pager:
+            pager = get_options()['scrollback_pager']
+
+        cmd = list(map(prepare_arg, pager))
         if not os.path.isabs(cmd[0]):
             resolved_exe = which(cmd[0])
             if not resolved_exe:

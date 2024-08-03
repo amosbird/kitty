@@ -1209,6 +1209,9 @@ class Parser:
     def scrollback_pager_history_size(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['scrollback_pager_history_size'] = scrollback_pager_history_size(val)
 
+    def scrollback_pager_search(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['scrollback_pager_search'] = to_cmdline(val)
+
     def scrollbar(self, val: str, ans: dict[str, typing.Any]) -> None:
         val = val.lower()
         if val not in self.choices_for_scrollbar:

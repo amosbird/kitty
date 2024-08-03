@@ -416,6 +416,7 @@ option_names = (
     'scrollback_lines',
     'scrollback_pager',
     'scrollback_pager_history_size',
+    'scrollback_pager_search',
     'scrollbar',
     'scrollbar_gap',
     'scrollbar_handle_color',
@@ -604,6 +605,7 @@ class Options:
     scrollback_lines: int = 2000
     scrollback_pager: list[str] = ['less', '--chop-long-lines', '--RAW-CONTROL-CHARS', '+INPUT_LINE_NUMBER']
     scrollback_pager_history_size: int = 0
+    scrollback_pager_search: list[str] = ['less', '--chop-long-lines', '--RAW-CONTROL-CHARS', '+INPUT_LINE_NUMBER']
     scrollbar: choices_for_scrollbar = 'scrolled'
     scrollbar_gap: float = 0.1
     scrollbar_handle_color: int = 0
