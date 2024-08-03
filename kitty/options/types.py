@@ -413,6 +413,7 @@ option_names = (
     'scrollback_lines',
     'scrollback_pager',
     'scrollback_pager_history_size',
+    'scrollback_pager_search',
     'select_by_word_characters',
     'select_by_word_characters_forward',
     'selection_background',
@@ -584,6 +585,7 @@ class Options:
     scrollback_lines: int = 2000
     scrollback_pager: list[str] = ['less', '--chop-long-lines', '--RAW-CONTROL-CHARS', '+INPUT_LINE_NUMBER']
     scrollback_pager_history_size: int = 0
+    scrollback_pager_search: list[str] = ['less', '--chop-long-lines', '--RAW-CONTROL-CHARS', '+INPUT_LINE_NUMBER']
     select_by_word_characters: str = '@-./_~?&=%+#'
     select_by_word_characters_forward: str = ''
     selection_background: kitty.fast_data_types.Color | None = Color(255, 250, 205)

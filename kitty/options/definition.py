@@ -455,6 +455,13 @@ output.
 '''
     )
 
+opt('scrollback_pager_search', 'less --chop-long-lines --RAW-CONTROL-CHARS +INPUT_LINE_NUMBER',
+    option_type='to_cmdline',
+    long_text='''
+Similar to scrollback_pager but allows to set up a different program for show_scrollback_search.
+'''
+    )
+
 opt('scrollback_pager_history_size', '0',
     option_type='scrollback_pager_history_size', ctype='uint',
     long_text='''
