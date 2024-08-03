@@ -411,6 +411,7 @@ option_names = (  # {{{
  'scrollback_indicator_opacity',
  'scrollback_lines',
  'scrollback_pager',
+ 'scrollback_pager_search',
  'scrollback_pager_history_size',
  'select_by_word_characters',
  'select_by_word_characters_forward',
@@ -579,6 +580,7 @@ class Options:
     scrollback_indicator_opacity: float = 1.0
     scrollback_lines: int = 2000
     scrollback_pager: typing.List[str] = ['less', '--chop-long-lines', '--RAW-CONTROL-CHARS', '+INPUT_LINE_NUMBER']
+    scrollback_pager_search: typing.List[str] = ['less', '--chop-long-lines', '--RAW-CONTROL-CHARS', '+INPUT_LINE_NUMBER']
     scrollback_pager_history_size: int = 0
     select_by_word_characters: str = '@-./_~?&=%+#'
     select_by_word_characters_forward: str = ''
