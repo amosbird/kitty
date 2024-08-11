@@ -1190,6 +1190,12 @@ class Parser:
     def scrollback_pager(self, val: str, ans: typing.Dict[str, typing.Any]) -> None:
         ans['scrollback_pager'] = to_cmdline(val)
 
+    def scrollback_pager_search(self, val: str, ans: typing.Dict[str, typing.Any]) -> None:
+        ans['scrollback_pager_search'] = to_cmdline(val)
+
+    def scrollback_pager_prompt(self, val: str, ans: typing.Dict[str, typing.Any]) -> None:
+        ans['scrollback_pager_prompt'] = to_cmdline(val)
+
     def scrollback_pager_history_size(self, val: str, ans: typing.Dict[str, typing.Any]) -> None:
         ans['scrollback_pager_history_size'] = scrollback_pager_history_size(val)
 
