@@ -26,12 +26,17 @@ Next shell prompt           :sc:`scroll_to_next_prompt` (see :ref:`shell_integra
 Browse scrollback in less   :sc:`show_scrollback`
 Browse last cmd output      :sc:`show_last_command_output` (see :ref:`shell_integration`)
 Search scrollback in less   :sc:`search_scrollback` (also :kbd:`⌘+F` on macOS)
+Enter scroll mode           :sc:`enter_scroll_mode`
+Scroll mode with search     :sc:`enter_scroll_search`
+Scroll mode at prompt       :sc:`enter_scroll_prompt`
 =========================   =======================
 
 The scroll actions only take effect when the terminal is in the main screen.
 When the alternate screen is active (for example when using a full screen
 program like an editor) the key events are instead passed to program running in the
-terminal.
+terminal. The scroll mode actions (:sc:`enter_scroll_mode`, :sc:`enter_scroll_search`,
+:sc:`enter_scroll_prompt`) work even in alternate screen by temporarily switching
+to the main buffer.
 
 Tabs
 ~~~~~~~~~~~

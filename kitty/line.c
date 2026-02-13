@@ -1130,6 +1130,16 @@ static PyMethodDef methods[] = {
     {NULL}  /* Sentinel */
 };
 
+static PyObject*
+prompt_kind_get(Line *self, void UNUSED *closure) {
+    return PyLong_FromUnsignedLong(self->attrs.prompt_kind);
+}
+
+static PyGetSetDef getsetters[] = {
+    {"prompt_kind", (getter)prompt_kind_get, NULL, "prompt_kind", NULL},
+    {NULL}
+};
+
 PyTypeObject Line_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "fast_data_types.Line",
@@ -1142,6 +1152,7 @@ PyTypeObject Line_Type = {
     .tp_richcompare = richcmp,
     .tp_doc = "Lines",
     .tp_methods = methods,
+    .tp_getset = getsetters,
 };
 
 Line *alloc_line(TextCache *tc) {
