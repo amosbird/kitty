@@ -1610,7 +1610,78 @@ class Boss:
         self.mappings.push_keyboard_mode(new_mode)
 
     def dispatch_possible_special_key(self, ev: KeyEvent) -> bool:
+        w = self.active_window
+        if w is not None and w.scroll_mode.active:
+            return w.scroll_mode.handle_key(ev)
         return self.mappings.dispatch_possible_special_key(ev)
+
+    def scroll_mode_from_mouse(self, window_id: int, cell_y: int) -> None:
+        """Called from C when scroll-up auto-enters scroll mode."""
+        w = self.window_id_map.get(window_id)
+        if w is not None and not w.scroll_mode.active:
+            w.scroll_mode.enter(w)
+            if w.scroll_mode.active:
+                # Place cursor at the cell_y position (bottom of viewport area)
+                screen = w.screen
+                vt = screen.historybuf.count - screen.scrolled_by
+                w.scroll_mode._move_cursor_to(vt + cell_y, 0)
+
+    def scroll_mode_from_mouse_scroll(self, window_id: int, delta: int, clamped_y: int) -> None:
+        """Called from C after mouse wheel scroll in scroll mode to sync Python state."""
+        w = self.window_id_map.get(window_id)
+        if w is not None and w.scroll_mode.active:
+            screen = w.screen
+            # Auto-exit when scrolled back to bottom
+            if screen.scrolled_by == 0 and delta < 0:
+                w.scroll_mode.exit()
+                return
+            vt = screen.historybuf.count - screen.scrolled_by
+            w.scroll_mode._cursor_abs = vt + clamped_y
+            w.scroll_mode._sync_cursor()
+            w.scroll_mode._mark_dirty()
+
+    def clear_pending_sequences(self) -> None:
+        self.pending_sequences = None
+        self.current_sequence = []
+        self.default_pending_action = ''
+        set_in_sequence_mode(False)
+
+    def process_sequence(self, ev: KeyEvent) -> bool:
+        # Process an event as part of a sequence. Returns whether the key
+        # is consumed as part of a kitty sequence keybinding.
+        if not self.pending_sequences:
+            set_in_sequence_mode(False)
+            return False
+
+        if self.current_sequence:
+            self.current_sequence.append(ev)
+        if ev.action == GLFW_RELEASE or is_modifier_key(ev.key):
+            return True
+        # For a press/repeat event that's not a modifier, try matching with
+        # kitty bindings:
+        remaining = {}
+        matched_action = None
+        for seq, key_action in self.pending_sequences.items():
+            if shortcut_matches(seq[0], ev):
+                seq = seq[1:]
+                if seq:
+                    remaining[seq] = key_action
+                else:
+                    matched_action = key_action
+
+        if remaining:
+            self.pending_sequences = remaining
+            return True
+        matched_action = matched_action or self.default_pending_action
+        if matched_action:
+            self.clear_pending_sequences()
+            self.combine(matched_action)
+            return True
+        w = self.active_window
+        if w is not None:
+            w.write_to_child(b''.join(w.encoded_key(ev) for ev in self.current_sequence))
+        self.clear_pending_sequences()
+        return False
 
     def cancel_current_visual_select(self) -> None:
         if self.current_visual_select:

@@ -214,6 +214,25 @@ your favorite pager program (which is :program:`less` by default). Colors and
 text formatting are preserved. You can explore the scrollback buffer comfortably
 within the pager.
 
+Alternatively, |kitty| provides a built-in scroll mode (:sc:`enter_scroll_mode`)
+that lets you navigate the scrollback buffer with vim-like keys without launching
+an external pager. You can move with :kbd:`h`/:kbd:`j`/:kbd:`k`/:kbd:`l`, search
+with :kbd:`/`, select text with :kbd:`v`/:kbd:`V`/:kbd:`Ctrl+V`, and yank to
+clipboard with :kbd:`y`. Press :kbd:`q` or :kbd:`Escape` to exit. You can also
+jump directly into search (:sc:`enter_scroll_search`) or jump to the previous
+shell prompt (:sc:`enter_scroll_prompt`).
+
+Scroll mode also supports full mouse interaction. Inside scroll mode, click to
+move the cursor, double-click to select a word, triple-click to select a line,
+and drag to start a visual character selection. The scroll wheel moves the
+viewport while keeping the cursor clamped to the visible area; scrolling back
+down to the bottom automatically exits scroll mode.
+
+With the :opt:`scroll_mode_mouse` option enabled, mouse actions in normal mode
+automatically enter scroll mode: double-click selects a word, triple-click
+selects a line, dragging starts a visual selection, and scrolling up enters
+navigate mode.
+
 Additionally, you can pipe the contents of the scrollback buffer to an
 arbitrary, command running in a new :term:`window`, :term:`tab` or
 :term:`overlay`. For example::

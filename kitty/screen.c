@@ -3587,6 +3587,41 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
         }
         update_line_data(linep, render_row, address);
     }
+    // Render scroll mode selection as reverse-video
+    if (self->scroll_mode.sel_active) {
+        GPUCell *cells = (GPUCell*)address;
+        unsigned int sy = self->scroll_mode.sel_start_y;
+        unsigned int sx = self->scroll_mode.sel_start_x;
+        unsigned int ey = self->scroll_mode.sel_end_y;
+        unsigned int ex = self->scroll_mode.sel_end_x;
+        unsigned int sel_type = self->scroll_mode.sel_active;
+        for (unsigned int row = sy; row <= ey && row < self->lines; row++) {
+            unsigned int x_start, x_end;
+            if (sel_type == 2) {  // line selection
+                x_start = 0;
+                x_end = self->columns - 1;
+            } else if (sel_type == 3) {  // block selection: rectangle
+                x_start = sx < ex ? sx : ex;
+                x_end = sx < ex ? ex : sx;
+            } else {  // char selection
+                if (row == sy && row == ey) { x_start = sx; x_end = ex; }
+                else if (row == sy) { x_start = sx; x_end = self->columns - 1; }
+                else if (row == ey) { x_start = 0; x_end = ex; }
+                else { x_start = 0; x_end = self->columns - 1; }
+            }
+            for (unsigned int col = x_start; col <= x_end && col < self->columns; col++) {
+                GPUCell *cell = &cells[row * self->columns + col];
+                cell->attrs.reverse = !cell->attrs.reverse;
+            }
+        }
+    }
+    // Render scroll mode cursor with mark highlight + underline
+    if (self->scroll_mode.active && self->scroll_mode.y < self->lines && self->scroll_mode.x < self->columns) {
+        GPUCell *cells = (GPUCell*)address;
+        GPUCell *cell = &cells[self->scroll_mode.y * self->columns + self->scroll_mode.x];
+        cell->attrs.mark = 3;
+        cell->attrs.decoration = 1;  // underline
+    }
     if (is_overlay_active && self->overlay_line.ynum + self->scrolled_by < self->lines) {
         if (self->overlay_line.is_dirty) {
             linebuf_init_line(self->linebuf, self->overlay_line.ynum);
@@ -5842,6 +5877,80 @@ current_selections(Screen *self, PyObject *a UNUSED) {
     return ans;
 }
 
+static PyObject*
+set_scroll_cursor(Screen *self, PyObject *args) {
+    unsigned int x, y, active;
+    if (!PyArg_ParseTuple(args, "III", &x, &y, &active)) return NULL;
+    self->scroll_mode.x = x;
+    self->scroll_mode.y = y;
+    self->scroll_mode.active = active;
+    self->is_dirty = true;
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+set_scroll_pause(Screen *self, PyObject *args) {
+    int pause;
+    if (!PyArg_ParseTuple(args, "p", &pause)) return NULL;
+    if (pause) {
+        // Buffer size: scrollback lines * columns * ~6 bytes/char, minimum 1MB
+        size_t capacity = (size_t)self->historybuf->ynum * self->columns * 6;
+        if (capacity < 1024 * 1024) capacity = 1024 * 1024;
+        if (!self->scroll_mode.pending_bytes || self->scroll_mode.pending_capacity != capacity) {
+            free(self->scroll_mode.pending_bytes);
+            self->scroll_mode.pending_bytes = calloc(capacity, 1);
+            if (!self->scroll_mode.pending_bytes) { self->scroll_mode.pending_capacity = 0; return PyErr_NoMemory(); }
+            self->scroll_mode.pending_capacity = capacity;
+        }
+        self->scroll_mode.pending_used = 0;
+        self->scroll_mode.pause_input = true;
+    } else {
+        self->scroll_mode.pause_input = false;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+flush_scroll_pending(Screen *self, PyObject *args UNUSED) {
+    if (self->scroll_mode.pending_bytes && self->scroll_mode.pending_used > 0) {
+        size_t offset = 0;
+        ParseData pd = {.now = monotonic()};
+        while (offset < self->scroll_mode.pending_used) {
+            size_t available;
+            uint8_t *buf = vt_parser_create_write_buffer(self->vt_parser, &available);
+            if (!available) {
+                parse_worker(self, &pd, true);
+                continue;
+            }
+            size_t to_copy = self->scroll_mode.pending_used - offset;
+            if (to_copy > available) to_copy = available;
+            memcpy(buf, self->scroll_mode.pending_bytes + offset, to_copy);
+            vt_parser_commit_write(self->vt_parser, to_copy);
+            offset += to_copy;
+        }
+        self->scroll_mode.pending_used = 0;
+        parse_worker(self, &pd, true);
+    }
+    free(self->scroll_mode.pending_bytes);
+    self->scroll_mode.pending_bytes = NULL;
+    self->scroll_mode.pending_capacity = 0;
+    self->is_dirty = true;
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+set_scroll_selection(Screen *self, PyObject *args) {
+    unsigned int sel_type, sx, sy, ex, ey;
+    if (!PyArg_ParseTuple(args, "IIIII", &sel_type, &sx, &sy, &ex, &ey)) return NULL;
+    self->scroll_mode.sel_active = sel_type;
+    self->scroll_mode.sel_start_x = sx;
+    self->scroll_mode.sel_start_y = sy;
+    self->scroll_mode.sel_end_x = ex;
+    self->scroll_mode.sel_end_y = ey;
+    self->is_dirty = true;
+    Py_RETURN_NONE;
+}
+
 WRAP0(update_only_line_graphics_data)
 WRAP0(bell)
 
@@ -5942,6 +6051,10 @@ static PyMethodDef methods[] = {
     METHODB(test_create_write_buffer, METH_NOARGS),
     METHODB(test_commit_write_buffer, METH_VARARGS),
     METHODB(test_parse_written_data, METH_VARARGS),
+    MND(set_scroll_cursor, METH_VARARGS)
+    MND(set_scroll_selection, METH_VARARGS)
+    MND(set_scroll_pause, METH_VARARGS)
+    MND(flush_scroll_pending, METH_NOARGS)
     MND(line_edge_colors, METH_NOARGS)
     MND(line, METH_O)
     MND(dump_lines_with_attrs, METH_VARARGS)

@@ -640,6 +640,20 @@ HANDLER(handle_move_event) {
         return;
     }
     Screen *screen = w->render_data.screen;
+    // Scroll mode: dispatch drag to Python, bypass normal handling
+    if (screen && screen->scroll_mode.active) {
+        if (mouse_cell_changed && button >= 0) {
+            dispatch_mouse_event(w, button, 0, modifiers, false);
+        }
+        return;
+    }
+    // Auto-enter scroll mode on drag in normal mode (main screen, no mouse tracking)
+    if (OPT(scroll_mode_mouse) && screen && button == GLFW_MOUSE_BUTTON_LEFT && mouse_cell_changed
+            && screen->linebuf == screen->main_linebuf
+            && !screen->modes.mouse_tracking_mode) {
+        dispatch_mouse_event(w, button, 0, modifiers, false);
+        if (screen->scroll_mode.active) return;
+    }
     if (OPT(detect_urls)) detect_url(screen, w->mouse_pos.cell_x, w->mouse_pos.cell_y);
     if (should_handle_in_kitty(w, screen, button)) {
         handle_mouse_movement_in_kitty(w, button, mouse_cell_changed | cell_half_changed);
@@ -827,6 +841,27 @@ HANDLER(handle_button_event) {
     if (!screen) return;
     bool a, b;
     if (!set_mouse_position(w, &a, &b)) return;
+
+    // Scroll mode: intercept mouse and dispatch to Python, bypassing
+    // normal selection and child-process mouse tracking.
+    if (screen->scroll_mode.active) {
+        if (!is_release && button >= 0 && button < (ssize_t)arraysz(w->click_queues)) {
+            // Record press for multi-click timing (same as add_press but
+            // without its internal dispatch, to avoid double-dispatch).
+            ClickQueue *q = &w->click_queues[button];
+            if (q->length == CLICK_QUEUE_SZ) { memmove(q->clicks, q->clicks + 1, sizeof(Click) * (CLICK_QUEUE_SZ - 1)); q->length--; }
+            q->clicks[q->length] = (Click){.at = monotonic(), .button = button,
+                .modifiers = modifiers & ~GLFW_LOCK_MASK,
+                .x = MAX(0, w->mouse_pos.global_x), .y = MAX(0, w->mouse_pos.global_y)};
+            q->length++;
+            int count = multi_click_count(w, button);
+            if (count < 1) count = 1;
+            dispatch_mouse_event(w, button, count, modifiers, false);
+            if (count > 2) q->length = 0;
+        }
+        return;
+    }
+
     id_type wid = w->id;
     if (!dispatch_mouse_event(w, button, is_release ? -1 : 1, modifiers, screen->modes.mouse_tracking_mode != 0)) {
         if (screen->modes.mouse_tracking_mode != 0) {
@@ -1314,11 +1349,23 @@ scroll_event(const GLFWScrollEvent *ev) {
                         }
                     }
             } else {
-                    if (screen->linebuf == screen->main_linebuf) {
+                    if (screen->scroll_mode.active) {
+                        screen_history_scroll(screen, abs(s), upwards);
+                        // Clamp scroll mode cursor to viewport bounds
+                        if (screen->scroll_mode.y >= screen->lines)
+                            screen->scroll_mode.y = screen->lines - 1;
+                        screen->is_dirty = true;
+                        // Notify Python to sync cursor state
+                        call_boss(scroll_mode_from_mouse_scroll, "KiI", w->id,
+                                  upwards ? abs(s) : -abs(s), screen->scroll_mode.y);
+                    } else if (screen->linebuf == screen->main_linebuf) {
                         screen_history_scroll(screen, abs(s), upwards);
                         if (screen->selections.in_progress) update_drag(w);
+                        // Auto-enter scroll mode when scrolling up
+                        if (OPT(scroll_mode_mouse) && upwards && screen->scrolled_by > 0) {
+                            call_boss(scroll_mode_from_mouse, "Ki", w->id, (int)w->mouse_pos.cell_y);
+                        }
                     }
-                    else fake_scroll(w, abs(s), upwards);
                 }
             }
         }
