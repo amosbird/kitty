@@ -192,6 +192,18 @@ typedef struct {
     ListOfChars *lc;
     monotonic_t parsing_at;
     ExtraCursors extra_cursors;
+    struct {
+        unsigned int active;
+        unsigned int x, y;  // viewport-relative cursor position
+        unsigned int cursor_width;  // 1 for normal, 2 for wide chars
+        unsigned int sel_active;  // 0=none, 1=char, 2=line, 3=block
+        unsigned int sel_start_x, sel_start_y;
+        unsigned int sel_end_x, sel_end_y;
+        bool pause_input;  // redirect child output to pending buffer
+        uint8_t *pending_bytes;
+        size_t pending_capacity;
+        size_t pending_used;
+    } scroll_mode;
 } Screen;
 
 #define pixel_scroll_enabled(screen) (OPT(pixel_scroll) && !screen->paused_rendering.expires_at && screen->linebuf == screen->main_linebuf)

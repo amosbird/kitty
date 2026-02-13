@@ -591,6 +591,19 @@ convert_from_opts_detect_urls(PyObject *py_opts, Options *opts) {
 }
 
 static void
+convert_from_python_scroll_mode_mouse(PyObject *val, Options *opts) {
+    opts->scroll_mode_mouse = PyObject_IsTrue(val);
+}
+
+static void
+convert_from_opts_scroll_mode_mouse(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "scroll_mode_mouse");
+    if (ret == NULL) return;
+    convert_from_python_scroll_mode_mouse(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
 convert_from_python_url_excluded_characters(PyObject *val, Options *opts) {
     url_excluded_characters(val, opts);
 }
@@ -1461,6 +1474,8 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     convert_from_opts_url_prefixes(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_detect_urls(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_scroll_mode_mouse(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_url_excluded_characters(py_opts, opts);
     if (PyErr_Occurred()) return false;

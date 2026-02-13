@@ -495,6 +495,10 @@ cell_update_uniform_block(ssize_t vao_idx, Screen *screen, int uniform_buffer, c
     Line *line_for_cursor = NULL;
     rd->cursor_opacity = MAX(0, MIN(cursor->cursor_opacity, 1));
     rd->blink_opacity = MAX(0, MIN(cursor->text_blink_opacity, 1));
+    // Hide text cursor when scroll mode is active (scroll mode draws its own)
+    if (screen->scroll_mode.active) {
+        rd->cursor_opacity = 0;
+    }
     if (rd->cursor_opacity != 0 && cursor->is_visible) {
         rd->cursor_x1 = cursor->x, rd->cursor_y1 = cursor->y;
         rd->cursor_x2 = cursor->x, rd->cursor_y2 = cursor->y;

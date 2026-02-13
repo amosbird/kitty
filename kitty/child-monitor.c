@@ -1402,6 +1402,24 @@ remove_children(ChildMonitor *self) {
 static bool
 read_bytes(int fd, Screen *screen) {
     ssize_t len;
+
+    // When scroll mode is active, buffer raw bytes instead of feeding VT parser
+    if (screen->scroll_mode.pause_input && screen->scroll_mode.pending_bytes) {
+        size_t available = screen->scroll_mode.pending_capacity - screen->scroll_mode.pending_used;
+        if (!available) return true;  // buffer full: stop reading, child blocks on PTY write
+        while (true) {
+            len = read(fd, screen->scroll_mode.pending_bytes + screen->scroll_mode.pending_used, available);
+            if (len < 0) {
+                if (errno == EINTR || errno == EAGAIN) continue;
+                if (errno != EIO) perror("Call to read() from child fd failed");
+                return false;
+            }
+            break;
+        }
+        screen->scroll_mode.pending_used += len;
+        return len != 0;
+    }
+
     size_t available_buffer_space;
 
     uint8_t *buf = vt_parser_create_write_buffer(screen->vt_parser, &available_buffer_space);
@@ -1565,6 +1583,10 @@ io_loop(void *data) {
             screen = children[i].screen;
             /* printf("i:%lu id:%lu fd: %d read_buf_sz: %lu write_buf_used: %lu\n", i, children[i].id, children[i].fd, screen->read_buf_sz, screen->write_buf_used); */
             children_fds[EXTRA_FDS + i].events = vt_parser_has_space_for_input(screen->vt_parser) ? POLLIN : 0;
+            // When scroll mode is pausing input, drain PTY into pending buffer
+            if (screen->scroll_mode.pause_input) {
+                children_fds[EXTRA_FDS + i].events = (screen->scroll_mode.pending_used < screen->scroll_mode.pending_capacity) ? POLLIN : 0;
+            }
             screen_mutex(lock, write);
             children_fds[EXTRA_FDS + i].events |= (screen->write_buf_used ? POLLOUT  : 0);
             screen_mutex(unlock, write);

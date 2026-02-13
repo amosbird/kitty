@@ -110,6 +110,7 @@ typedef struct Options {
     } url_prefixes;
     char_type *url_excluded_characters;
     bool detect_urls;
+    bool scroll_mode_mouse;
     bool tab_bar_hidden;
     double font_size;
     struct {

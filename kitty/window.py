@@ -95,6 +95,7 @@ from .notifications import NotificationManager
 from .options.types import Options
 from .progress import Progress
 from .rgb import to_color
+from .scroll_mode import ScrollMode
 from .terminfo import get_capabilities
 from .types import MouseEvent, NeighborsMap, OverlayType, WindowGeometry, ac, run_once
 from .typing_compat import BossType, ChildType, EdgeLiteral, TabType, TypedDict
@@ -741,6 +742,7 @@ class Window:
             self.screen.copy_colors_from(copy_colors_from.screen)
         self.remote_control_passwords = remote_control_passwords
         self.allow_remote_control = allow_remote_control
+        self.scroll_mode = ScrollMode()
 
     def remote_control_allowed(self, pcmd: dict[str, Any], extra_data: dict[str, Any]) -> bool:
         if not self.allow_remote_control:
@@ -1167,6 +1169,11 @@ class Window:
 
     def on_mouse_event(self, event: dict[str, Any]) -> bool:
         event['mods'] = event.get('mods', 0) & mod_mask
+        # Intercept mouse events for scroll mode
+        button = event.get('button', -1)
+        repeat_count = event.get('repeat_count', 0)
+        if self.scroll_mode.handle_mouse(self, button, repeat_count):
+            return True
         ev = MouseEvent(**event)
         self.current_mouse_event_button = ev.button
         action = get_options().mousemap.get(ev)
@@ -2138,6 +2145,18 @@ class Window:
                     sanitized = sanitized.replace(b'\n', b'\x1bE')
                 w.screen.paste_bytes(sanitized)
                 w.send_key('enter')
+
+    @ac('sc', 'Enter scroll mode to navigate scrollback buffer with vim-like keys')
+    def enter_scroll_mode(self) -> None:
+        self.scroll_mode.enter(self)
+
+    @ac('sc', 'Enter scroll mode directly in search state')
+    def enter_scroll_search(self) -> None:
+        self.scroll_mode.enter_search(self)
+
+    @ac('sc', 'Enter scroll mode and jump to previous prompt')
+    def enter_scroll_prompt(self) -> None:
+        self.scroll_mode.enter_prompt_jump(self)
 
     def show_cmd_output(self, which: CommandOutput, title: str = 'Command output', as_ansi: bool = True, add_wrap_markers: bool = True) -> None:
         text = self.cmd_output(which, as_ansi=as_ansi, add_wrap_markers=add_wrap_markers)

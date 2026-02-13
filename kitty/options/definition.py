@@ -701,6 +701,17 @@ how hyperlinks (as opposed to plain text URLs) are displayed.
 '''
     )
 
+opt('scroll_mode_mouse', 'no',
+    option_type='to_bool', ctype='bool',
+    long_text='''
+When enabled, mouse actions automatically enter scroll mode: double-click
+selects a word, triple-click selects a line, dragging starts a visual
+selection, and scrolling up enters navigate mode. When disabled (the default),
+mouse behavior is the standard kitty behavior and scroll mode is only entered
+via keyboard shortcuts.
+'''
+    )
+
 opt('url_excluded_characters', '',
     option_type='python_string', ctype='!url_excluded_characters',
     long_text='''
@@ -3988,6 +3999,37 @@ For example, the following opens the scrollback buffer in less in an
 
 For more details on piping screen and buffer contents to external programs,
 see :doc:`launch`.
+'''
+    )
+
+map('Enter scroll mode',
+    'enter_scroll_mode alt+v enter_scroll_mode',
+    long_text='''
+Enter a native scroll mode to navigate the scrollback buffer with vim-like
+keys. Press :kbd:`h`/:kbd:`j`/:kbd:`k`/:kbd:`l` to move the cursor,
+:kbd:`Ctrl+u`/:kbd:`Ctrl+d` for half page, :kbd:`g`/:kbd:`G` for top/bottom.
+Use :kbd:`/` to search, :kbd:`v`/:kbd:`V`/:kbd:`Ctrl+v` for visual selection,
+and :kbd:`y` to yank to clipboard. Press :kbd:`q` or :kbd:`Escape` to exit.
+This works even when the alternate screen is active (e.g. inside vim).
+'''
+    )
+
+map('Enter scroll mode in search',
+    'enter_scroll_search alt+s enter_scroll_search',
+    long_text='''
+Enter scroll mode and immediately start an incremental search of the scrollback
+buffer. Type to search, press :kbd:`Enter` to accept, :kbd:`Escape` to cancel.
+Use :kbd:`n`/:kbd:`N` to jump between matches.
+'''
+    )
+
+map('Enter scroll mode and jump to previous prompt',
+    'enter_scroll_prompt alt+u enter_scroll_prompt',
+    long_text='''
+Enter scroll mode and jump to the previous shell prompt in the scrollback
+buffer. Prompts are detected via regex pattern matching of common prompt
+characters (``$``, ``#``, ``%``, ``>``, ``❯``, etc.). If no prompt is found
+above the current cursor position, scroll mode is not activated.
 '''
     )
 

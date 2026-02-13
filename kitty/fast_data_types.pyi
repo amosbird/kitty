@@ -1350,6 +1350,18 @@ class Screen:
     def set_marker(self, marker: Optional[MarkerFunc] = None) -> None:
         pass
 
+    def set_scroll_cursor(self, x: int, y: int, active: int) -> None:
+        pass
+
+    def set_scroll_selection(self, sel_type: int, start_x: int, start_y: int, end_x: int, end_y: int) -> None:
+        pass
+
+    def set_scroll_pause(self, pause: bool) -> None:
+        pass
+
+    def flush_scroll_pending(self) -> None:
+        pass
+
     def paste_bytes(self, data: bytes) -> None:
         pass
     paste = paste_bytes
