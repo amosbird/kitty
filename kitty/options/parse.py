@@ -1203,6 +1203,9 @@ class Parser:
     def resize_in_steps(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['resize_in_steps'] = to_bool(val)
 
+    def scroll_mode_mouse(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['scroll_mode_mouse'] = to_bool(val)
+
     def scrollback_fill_enlarged_window(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['scrollback_fill_enlarged_window'] = to_bool(val)
 

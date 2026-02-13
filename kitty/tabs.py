@@ -372,6 +372,10 @@ class Tab:  # {{{
         return []
 
     def active_window_changed(self) -> None:
+        # Exit scroll mode on any window that is no longer active
+        for w in self:
+            if w.scroll_mode.active and w is not self.active_window:
+                w.scroll_mode.exit()
         w = self.active_window
         set_active_window(self.os_window_id, self.id, 0 if w is None else w.id)
         self.mark_tab_bar_dirty()
@@ -1199,6 +1203,13 @@ class TabManager:  # {{{
                 watcher(boss, w, data)
 
     def update_tab_bar_data(self) -> None:
+        # If scroll mode is active, let it control the tab bar content
+        at = self.active_tab
+        if at is not None:
+            w = at.active_window
+            if w is not None and hasattr(w, 'scroll_mode') and w.scroll_mode.active:
+                w.scroll_mode._update_tab_bar()
+                return
         self.tab_bar.update(self.tab_bar_data)
 
     def title_changed(self, tab: Tab) -> None:
@@ -1214,6 +1225,12 @@ class TabManager:  # {{{
             tab.relayout()
 
     def set_active_tab_idx(self, idx: int) -> None:
+        # Exit scroll mode on the old active tab's window before switching
+        old_tab = self.active_tab
+        if old_tab is not None:
+            w = old_tab.active_window
+            if w is not None and w.scroll_mode.active:
+                w.scroll_mode.exit()
         self._set_active_tab(idx)
         tab = self.active_tab
         if tab is not None:

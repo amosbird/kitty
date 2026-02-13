@@ -640,10 +640,22 @@ HANDLER(handle_move_event) {
         return;
     }
     Screen *screen = w->render_data.screen;
+    // Scroll mode: dispatch drag to Python, bypass normal handling
+    if (screen && screen->scroll_mode.active) {
+        if (mouse_cell_changed && button >= 0) {
+            dispatch_mouse_event(w, button, 0, modifiers, false);
+        }
+        return;
+    }
+    // scroll_mode_mouse: auto-enter scroll mode on drag
+    if (OPT(scroll_mode_mouse) && screen && button == GLFW_MOUSE_BUTTON_LEFT && mouse_cell_changed) {
+        dispatch_mouse_event(w, button, 0, modifiers, false);
+        if (screen->scroll_mode.active) return;
+    }
     if (OPT(detect_urls)) detect_url(screen, w->mouse_pos.cell_x, w->mouse_pos.cell_y);
     if (should_handle_in_kitty(w, screen, button)) {
         handle_mouse_movement_in_kitty(w, button, mouse_cell_changed | cell_half_changed);
-    } else {
+    } else if (!(OPT(scroll_mode_mouse) && screen && screen->linebuf != screen->main_linebuf)) {
         if (!mouse_cell_changed && screen->modes.mouse_tracking_protocol != SGR_PIXEL_PROTOCOL) return;
         int sz = encode_mouse_button(w, button, button >=0 ? DRAG : MOVE, modifiers);
         if (sz > 0) { mouse_event_buf[sz] = 0; write_escape_code_to_child(screen, ESC_CSI, mouse_event_buf); }
@@ -827,9 +839,30 @@ HANDLER(handle_button_event) {
     if (!screen) return;
     bool a, b;
     if (!set_mouse_position(w, &a, &b)) return;
+
+    // Scroll mode: intercept mouse and dispatch to Python, bypassing
+    // normal selection and child-process mouse tracking.
+    if (screen->scroll_mode.active) {
+        if (!is_release && button >= 0 && button < (ssize_t)arraysz(w->click_queues)) {
+            ClickQueue *q = &w->click_queues[button];
+            if (q->length == CLICK_QUEUE_SZ) { memmove(q->clicks, q->clicks + 1, sizeof(Click) * (CLICK_QUEUE_SZ - 1)); q->length--; }
+            q->clicks[q->length] = (Click){.at = monotonic(), .button = button,
+                .modifiers = modifiers & ~GLFW_LOCK_MASK,
+                .x = MAX(0, w->mouse_pos.global_x), .y = MAX(0, w->mouse_pos.global_y)};
+            q->length++;
+            int count = multi_click_count(w, button);
+            if (count < 1) count = 1;
+            dispatch_mouse_event(w, button, count, modifiers, false);
+            if (count > 2) q->length = 0;
+            if (!screen->scroll_mode.active) q->length = 0;
+        }
+        return;
+    }
+
     id_type wid = w->id;
-    if (!dispatch_mouse_event(w, button, is_release ? -1 : 1, modifiers, screen->modes.mouse_tracking_mode != 0)) {
-        if (screen->modes.mouse_tracking_mode != 0) {
+    bool alt_scroll_mouse = OPT(scroll_mode_mouse) && screen->linebuf != screen->main_linebuf;
+    if (!dispatch_mouse_event(w, button, is_release ? -1 : 1, modifiers, screen->modes.mouse_tracking_mode != 0 && !alt_scroll_mouse)) {
+        if (screen->modes.mouse_tracking_mode != 0 && !alt_scroll_mouse) {
             int sz = encode_mouse_button(w, button, is_release ? RELEASE : PRESS, modifiers);
             if (sz > 0) { mouse_event_buf[sz] = 0; write_escape_code_to_child(screen, ESC_CSI, mouse_event_buf); }
         }
@@ -1291,7 +1324,30 @@ scroll_event(const GLFWScrollEvent *ev) {
             break;
     }
     if (ev->y_offset != 0.0) {
-        if (screen->modes.mouse_tracking_mode == NO_TRACKING && pixel_scroll_enabled_for_screen(screen) && (ev->offset_type == GLFW_SCROLL_OFFEST_HIGHRES || ev->offset_type == GLFW_SCROLL_OFFEST_V120)) {
+        // Scroll mode: use line-based scroll, bypass pixel scroll
+        if (screen->scroll_mode.active) {
+            int s = scale_scroll(screen->modes.mouse_tracking_mode, ev->y_offset, ev->offset_type, &screen->pending_scroll_pixels_y, global_state.callback_os_window->fonts_data->fcm.cell_height);
+            if (s) {
+                bool upwards = s > 0;
+                screen_history_scroll(screen, abs(s), upwards);
+                if (screen->scroll_mode.y >= screen->lines)
+                    screen->scroll_mode.y = screen->lines - 1;
+                screen->is_dirty = true;
+                call_boss(scroll_mode_from_mouse_scroll, "KiI", w->id,
+                          upwards ? abs(s) : -abs(s), screen->scroll_mode.y);
+            }
+        } else if (OPT(scroll_mode_mouse) && screen->linebuf == screen->main_linebuf && !screen->modes.mouse_tracking_mode) {
+            // Main screen + scroll_mode_mouse: line-based scroll, auto-enter on scroll up
+            int s = scale_scroll(screen->modes.mouse_tracking_mode, ev->y_offset, ev->offset_type, &screen->pending_scroll_pixels_y, global_state.callback_os_window->fonts_data->fcm.cell_height);
+            if (s) {
+                bool upwards = s > 0;
+                screen_history_scroll(screen, abs(s), upwards);
+                if (screen->selections.in_progress) update_drag(w);
+                if (upwards && screen->scrolled_by > 0) {
+                    call_boss(scroll_mode_from_mouse, "Ki", w->id, (int)w->mouse_pos.cell_y);
+                }
+            }
+        } else if (screen->modes.mouse_tracking_mode == NO_TRACKING && pixel_scroll_enabled_for_screen(screen) && (ev->offset_type == GLFW_SCROLL_OFFEST_HIGHRES || ev->offset_type == GLFW_SCROLL_OFFEST_V120)) {
             double delta_pixels;
             if (ev->offset_type == GLFW_SCROLL_OFFEST_HIGHRES) {
                 delta_pixels = ev->y_offset * OPT(touch_scroll_multiplier);
@@ -1305,7 +1361,7 @@ scroll_event(const GLFWScrollEvent *ev) {
             int s = scale_scroll(screen->modes.mouse_tracking_mode, ev->y_offset, ev->offset_type, &screen->pending_scroll_pixels_y, global_state.callback_os_window->fonts_data->fcm.cell_height);
             if (s) {
                 bool upwards = s > 0;
-                if (screen->modes.mouse_tracking_mode) {
+                if (screen->modes.mouse_tracking_mode && !(OPT(scroll_mode_mouse) && screen->linebuf != screen->main_linebuf)) {
                     int sz = encode_mouse_scroll(w, upwards ? 4 : 5, ev->keyboard_modifiers);
                     if (sz > 0) {
                         mouse_event_buf[sz] = 0;
