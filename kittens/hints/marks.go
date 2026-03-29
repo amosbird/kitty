@@ -99,10 +99,26 @@ type GroupProcessorFunc = func(map[string]string)
 
 func is_punctuation(b string) bool {
 	switch b {
-	case ",", ".", "?", "!":
+	case ",", ".", "?", "!", ";", ":":
 		return true
 	}
 	return false
+}
+
+func bracket_pair(closer string) string {
+	switch closer {
+	case ")":
+		return "("
+	case "]":
+		return "["
+	case "}":
+		return "{"
+	}
+	return ""
+}
+
+func is_closing_bracket(b string) bool {
+	return bracket_pair(b) != ""
 }
 
 func closing_bracket_for(ch string) string {
@@ -174,15 +190,39 @@ var PostProcessorMap = sync.OnceValue(func() map[string]PostProcessorFunc {
 					e -= len(url) - idx
 				}
 			}
-			for e > 1 && is_punctuation(char_at(text, e)) { // remove trailing punctuation
+			// truncate at non-ASCII Unicode punctuation (e.g. Chinese punctuation)
+			for i, r := range text[s:e] {
+				if r > 0x7f && unicode.IsPunct(r) {
+					e = s + i
+					break
+				}
+			}
+			for e > s && is_punctuation(char_at(text, e-1)) {
 				e--
 			}
-			// truncate url at closing bracket/quote
-			if s > 0 && e <= len(text) && closing_bracket_for(char_at(text, s-1)) != "" {
-				q := closing_bracket_for(char_at(text, s-1))
-				idx := strings.Index(text[s:], q)
-				if idx > 0 {
-					e = s + idx
+			for e > s && is_closing_bracket(char_at(text, e-1)) {
+				closer := char_at(text, e-1)
+				opener := bracket_pair(closer)
+				open_count := strings.Count(text[s:e], opener)
+				close_count := strings.Count(text[s:e], closer)
+				if close_count > open_count {
+					e--
+				} else {
+					break
+				}
+			}
+			// truncate url at closing quote/bracket for surrounding pairs
+			// (brackets are handled by the unbalanced-bracket logic above)
+			if s > 0 && e <= len(text) {
+				before := char_at(text, s-1)
+				if before != "(" && before != "[" && before != "{" {
+					q := closing_bracket_for(before)
+					if q != "" {
+						idx := strings.Index(text[s:e], q)
+						if idx > 0 {
+							e = s + idx
+						}
+					}
 				}
 			}
 			// reStructuredText URLs

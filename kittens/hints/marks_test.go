@@ -67,6 +67,28 @@ func TestHintMarking(t *testing.T) {
 	r(`<a href="`+u+`">moo`, u)
 	r("\x1b[mhttp://test.me/1234\n\x1b[mx", "http://test.me/1234")
 	r("\x1b[mhttp://test.me/12345\r\x1b[m6\n\x1b[mx", "http://test.me/123456")
+	cols = 60
+	r("http://example.com/path，其他文字", "http://example.com/path")
+	r("http://example.com/path。", "http://example.com/path")
+	r("http://example.com/path！end", "http://example.com/path")
+	r("http://example.com/path？end", "http://example.com/path")
+	r("http://example.com/path、end", "http://example.com/path")
+	// trailing ASCII punctuation
+	r("see http://example.com/path, more", "http://example.com/path")
+	r("see http://example.com/path. More", "http://example.com/path")
+	r("http://example.com/path;", "http://example.com/path")
+	r("http://example.com/path:", "http://example.com/path")
+	// unbalanced trailing brackets
+	r("(http://example.com/path)", "http://example.com/path")
+	r("(see http://example.com/path)", "http://example.com/path")
+	r("http://example.com/path)", "http://example.com/path")
+	// balanced brackets should be kept
+	r("http://en.wikipedia.org/wiki/Foo_(bar)", "http://en.wikipedia.org/wiki/Foo_(bar)")
+	// mixed trailing punctuation and brackets
+	r("(http://example.com/path).", "http://example.com/path")
+	r("http://example.com/path).", "http://example.com/path")
+	r("http://example.com/path),", "http://example.com/path")
+	cols = 20
 
 	opts.Type = "linenum"
 	m := func(text, path string, line int) {
