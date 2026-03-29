@@ -2160,6 +2160,8 @@ class Boss:
         if not self.os_window_map and is_macos:
             cocoa_set_menubar_title('')
         action = self.os_window_death_actions.pop(os_window_id, None)
+        if action is not None and grab_keyboard(None):
+            grab_keyboard(False)
         if action is not None:
             action()
 

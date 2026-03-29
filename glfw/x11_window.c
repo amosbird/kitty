@@ -3861,13 +3861,13 @@ _glfwPlatformSetWindowBlur(_GLFWwindow *window, int blur_radius) {
 
 bool
 _glfwPlatformGrabKeyboard(bool grab) {
-    int result;
     if (grab) {
-        result = XGrabKeyboard(_glfw.x11.display, _glfw.x11.root, True, GrabModeAsync, GrabModeAsync, CurrentTime);
+        return XGrabKeyboard(_glfw.x11.display, _glfw.x11.root, True, GrabModeAsync, GrabModeAsync, CurrentTime) == GrabSuccess;
     } else {
-        result = XUngrabKeyboard(_glfw.x11.display, CurrentTime);
+        XUngrabKeyboard(_glfw.x11.display, CurrentTime);
+        XFlush(_glfw.x11.display);
+        return true;
     }
-    return result == GrabSuccess;
 }
 
 //////////////////////////////////////////////////////////////////////////
