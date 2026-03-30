@@ -1979,6 +1979,13 @@ class Boss:
             if opts.draw_window_borders_for_single_window and (tab := tm.active_tab) is not None and not tab.windows.has_more_than_one_visible_group:
                 tab.relayout_borders()
 
+    def on_input_method_changed(self, os_window_id: int, im_name: str) -> None:
+        tm = self.os_window_map.get(os_window_id)
+        if tm is not None:
+            w = tm.active_window
+            if w is not None:
+                w.input_method_changed(im_name)
+
     def on_activity_since_last_focus(self, window: Window) -> None:
         os_window_id = window.os_window_id
         tm = self.os_window_map.get(os_window_id)

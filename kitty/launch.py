@@ -548,6 +548,9 @@ def load_watch_modules(watchers: Iterable[str]) -> Watchers | None:
         w = m.get('on_tab_bar_dirty')
         if callable(w):
             ans.on_tab_bar_dirty.append(w)
+        w = m.get('on_input_method_changed')
+        if callable(w):
+            ans.on_input_method_changed.append(w)
     return ans
 
 

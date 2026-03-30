@@ -306,6 +306,7 @@ class Watchers:
     on_cmd_startstop: list[Watcher]
     on_color_scheme_preference_change: list[Watcher]
     on_tab_bar_dirty: list[Watcher]
+    on_input_method_changed: list[Watcher]
 
     def __init__(self) -> None:
         self.on_resize = []
@@ -316,6 +317,7 @@ class Watchers:
         self.on_cmd_startstop = []
         self.on_color_scheme_preference_change = []
         self.on_tab_bar_dirty = []
+        self.on_input_method_changed = []
 
     def add(self, others: 'Watchers') -> None:
         def merge(base: list[Watcher], other: list[Watcher]) -> None:
@@ -330,12 +332,14 @@ class Watchers:
         merge(self.on_cmd_startstop, others.on_cmd_startstop)
         merge(self.on_color_scheme_preference_change, others.on_color_scheme_preference_change)
         merge(self.on_tab_bar_dirty, others.on_tab_bar_dirty)
+        merge(self.on_input_method_changed, others.on_input_method_changed)
 
     def clear(self) -> None:
         del self.on_close[:], self.on_resize[:], self.on_focus_change[:]
         del self.on_set_user_var[:], self.on_title_change[:], self.on_cmd_startstop[:]
         del self.on_color_scheme_preference_change[:]
         del self.on_tab_bar_dirty[:]
+        del self.on_input_method_changed[:]
 
     def copy(self) -> 'Watchers':
         ans = Watchers()
@@ -347,12 +351,14 @@ class Watchers:
         ans.on_cmd_startstop = self.on_cmd_startstop[:]
         ans.on_color_scheme_preference_change = self.on_color_scheme_preference_change[:]
         ans.on_tab_bar_dirty = self.on_tab_bar_dirty[:]
+        ans.on_input_method_changed = self.on_input_method_changed[:]
         return ans
 
     @property
     def has_watchers(self) -> bool:
         return bool(self.on_close or self.on_resize or self.on_focus_change or self.on_color_scheme_preference_change
-                    or self.on_set_user_var or self.on_title_change or self.on_cmd_startstop or self.on_tab_bar_dirty)
+                    or self.on_set_user_var or self.on_title_change or self.on_cmd_startstop or self.on_tab_bar_dirty
+                    or self.on_input_method_changed)
 
 
 def call_watchers(windowref: Callable[[], Optional['Window']], which: str, data: dict[str, Any]) -> None:
@@ -1392,6 +1398,10 @@ class Window:
         elif self.os_window_id == current_focused_os_window_id():
             # Cancel IME composition after loses focus
             update_ime_position_for_window(self.id, False, -1)
+
+    def input_method_changed(self, im_name: str) -> None:
+        if not self.destroyed:
+            call_watchers(weakref.ref(self), 'on_input_method_changed', {'im_name': im_name})
 
     def title_changed(self, new_title: memoryview | None, is_base64: bool = False) -> None:
         self.child_title = process_title_from_child(new_title or memoryview(b''), is_base64, self.default_title)

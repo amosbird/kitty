@@ -33,6 +33,7 @@
 #endif
 
 #include "ibus_glfw.h"
+#include "fcitx5_glfw.h"
 
 typedef struct {
     struct xkb_state*       state;
@@ -68,6 +69,7 @@ typedef struct {
     xkb_mod_mask_t          numLockMask;
     xkb_mod_index_t         unknownModifiers[256];
     _GLFWIBUSData           ibus;
+    _GLFWFcitx5Data         fcitx5;
 
 #ifdef _GLFW_X11
     int32_t                 keyboard_device_id;
