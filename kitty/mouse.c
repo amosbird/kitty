@@ -658,15 +658,16 @@ HANDLER(handle_move_event) {
         }
         return;
     }
-    // scroll_mode_mouse: auto-enter scroll mode on drag
-    if (OPT(scroll_mode_mouse) && screen && button == GLFW_MOUSE_BUTTON_LEFT && mouse_cell_changed) {
+    // scroll_mode_mouse: auto-enter scroll mode on drag (only when app is not tracking mouse)
+    bool alt_scroll_mouse = OPT(scroll_mode_mouse) && screen && screen->linebuf != screen->main_linebuf && screen->modes.mouse_tracking_mode == 0;
+    if (alt_scroll_mouse && button == GLFW_MOUSE_BUTTON_LEFT && mouse_cell_changed) {
         dispatch_mouse_event(w, button, 0, modifiers, false);
         if (screen->scroll_mode.active) return;
     }
     if (OPT(detect_urls)) detect_url(screen, w->mouse_pos.cell_x, w->mouse_pos.cell_y);
     if (should_handle_in_kitty(w, screen, button)) {
         handle_mouse_movement_in_kitty(w, button, mouse_cell_changed | cell_half_changed);
-    } else if (!(OPT(scroll_mode_mouse) && screen && screen->linebuf != screen->main_linebuf)) {
+    } else if (!alt_scroll_mouse) {
         if (!mouse_cell_changed && screen->modes.mouse_tracking_protocol != SGR_PIXEL_PROTOCOL) return;
         int sz = encode_mouse_button(w, button, button >=0 ? DRAG : MOVE, modifiers);
         if (sz > 0) { mouse_event_buf[sz] = 0; write_escape_code_to_child(screen, ESC_CSI, mouse_event_buf); }
@@ -732,7 +733,10 @@ add_press(Window *w, int button, int modifiers) {
     Screen *screen = w->render_data.screen;
     int count = multi_click_count(w, button);
     if (count > 1) {
-        if (screen) dispatch_mouse_event(w, button, count, modifiers, screen->modes.mouse_tracking_mode != 0);
+        if (screen) {
+            bool alt_scroll_mouse = OPT(scroll_mode_mouse) && screen->linebuf != screen->main_linebuf && screen->modes.mouse_tracking_mode == 0;
+            dispatch_mouse_event(w, button, count, modifiers, screen->modes.mouse_tracking_mode != 0 && !alt_scroll_mouse);
+        }
         if (count > 2) q->length = 0;
     }
 }
@@ -830,7 +834,8 @@ dispatch_possible_click(Window *w, int button, int modifiers) {
         pc->button = button;
         pc->count = count == 2 ? -3 : -2;
         pc->modifiers = modifiers;
-        pc->grabbed = screen->modes.mouse_tracking_mode != 0;
+        bool alt_scroll_mouse = OPT(scroll_mode_mouse) && screen->linebuf != screen->main_linebuf && screen->modes.mouse_tracking_mode == 0;
+        pc->grabbed = screen->modes.mouse_tracking_mode != 0 && !alt_scroll_mouse;
         pc->radius_for_multiclick = radius_for_multiclick();
         add_main_loop_timer(OPT(click_interval), false, dispatch_pending_clicks, NULL, NULL);
     }
@@ -887,7 +892,7 @@ HANDLER(handle_button_event) {
     }
 
     id_type wid = w->id;
-    bool alt_scroll_mouse = OPT(scroll_mode_mouse) && screen->linebuf != screen->main_linebuf;
+    bool alt_scroll_mouse = OPT(scroll_mode_mouse) && screen->linebuf != screen->main_linebuf && screen->modes.mouse_tracking_mode == 0;
     if (!dispatch_mouse_event(w, button, is_release ? -1 : 1, modifiers, screen->modes.mouse_tracking_mode != 0 && !alt_scroll_mouse)) {
         if (screen->modes.mouse_tracking_mode != 0 && !alt_scroll_mouse) {
             int sz = encode_mouse_button(w, button, is_release ? RELEASE : PRESS, modifiers);
