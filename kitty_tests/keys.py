@@ -2,6 +2,7 @@
 # License: GPL v3 Copyright: 2016, Kovid Goyal <kovid at kovidgoyal.net>
 
 from functools import partial
+from pathlib import Path
 from types import SimpleNamespace
 
 import kitty.fast_data_types as defines
@@ -13,6 +14,16 @@ from . import BaseTest
 
 
 class TestKeys(BaseTest):
+
+    def test_async_ime_key_updates_position_without_key_dispatch(self):
+        root = Path(__file__).parent.parent
+        xkb = (root / 'glfw/xkb_glfw.c').read_text()
+        keys = (root / 'kitty/keys.c').read_text()
+        self.ae(xkb.count('send_ime_position_event(window);'), 2)
+        position_update = keys.index('update_ime_position(w, screen);', keys.index('case GLFW_IME_NONE:'))
+        position_only_return = keys.index('if (!key && !native_key) return;', position_update)
+        normal_dispatch = keys.index('bool dispatch_ok = true', position_only_return)
+        self.assertLess(position_update, position_only_return, normal_dispatch)
 
     def test_encode_key_event(self):
         enc = defines.encode_key_for_tty

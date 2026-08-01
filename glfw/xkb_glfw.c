@@ -866,6 +866,13 @@ glfw_xkb_forwarded_key_from_ime(xkb_keysym_t keysym, unsigned int glfw_mods, int
     }
 }
 
+static void
+send_ime_position_event(_GLFWwindow *window) {
+    // shortcut: A zero key is the existing cross-platform position-only signal.
+    GLFWkeyevent ev = {.action = GLFW_PRESS, .ime_state = GLFW_IME_NONE};
+    _glfwInputKeyboard(window, &ev);
+}
+
 static bool
 is_switch_layout_key(xkb_keysym_t xkb_sym) {
     return xkb_sym == XKB_KEY_ISO_First_Group || xkb_sym == XKB_KEY_ISO_Last_Group || xkb_sym == XKB_KEY_ISO_Next_Group || xkb_sym == XKB_KEY_ISO_Prev_Group || xkb_sym == XKB_KEY_Mode_switch;
@@ -974,6 +981,7 @@ glfw_xkb_handle_key_event(_GLFWwindow *window, _GLFWXKBData *xkb, xkb_keycode_t 
         fcitx5_ev.window_id = window->id;
         fcitx5_ev.keysym = syms[0];
         if (fcitx5_process_key(&fcitx5_ev, &xkb->fcitx5)) {
+            send_ime_position_event(window);
             debug("↳ to FCITX5: keycode: 0x%x keysym: 0x%x (%s) %s\n", fcitx5_ev.keycode, fcitx5_ev.keysym, glfw_xkb_keysym_name(fcitx5_ev.keysym), format_mods(fcitx5_ev.glfw_ev.mods));
         } else {
             _glfwInputKeyboard(window, &glfw_ev);
@@ -985,6 +993,7 @@ glfw_xkb_handle_key_event(_GLFWwindow *window, _GLFWXKBData *xkb, xkb_keycode_t 
         ibus_ev.window_id = window->id;
         ibus_ev.ibus_keysym = syms[0];
         if (ibus_process_key(&ibus_ev, &xkb->ibus)) {
+            send_ime_position_event(window);
             debug("↳ to IBUS: keycode: 0x%x keysym: 0x%x (%s) %s\n", ibus_ev.ibus_keycode, ibus_ev.ibus_keysym, glfw_xkb_keysym_name(ibus_ev.ibus_keysym), format_mods(ibus_ev.glfw_ev.mods));
         } else {
             _glfwInputKeyboard(window, &glfw_ev);
