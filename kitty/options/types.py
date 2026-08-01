@@ -429,6 +429,7 @@ option_names = (
     'repaint_delay',
     'resize_debounce_time',
     'resize_in_steps',
+    'scroll_mode_mouse',
     'scrollback_fill_enlarged_window',
     'scrollback_lines',
     'scrollback_pager',
@@ -639,6 +640,7 @@ class Options:
     repaint_delay: int = 10
     resize_debounce_time: tuple[float, float] = (0.1, 0.5)
     resize_in_steps: bool = False
+    scroll_mode_mouse: bool = False
     scrollback_fill_enlarged_window: bool = False
     scrollback_lines: int = 2000
     scrollback_pager: list[str] = ['less', '--chop-long-lines', '--RAW-CONTROL-CHARS', '+INPUT_LINE_NUMBER']
@@ -901,6 +903,12 @@ defaults.map = [
     KeyDefinition(trigger=SingleKey(mods=256, key=120), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='scroll_to_prompt 1'),
     # show_scrollback
     KeyDefinition(trigger=SingleKey(mods=256, key=104), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='show_scrollback'),
+    # enter_scroll_mode
+    KeyDefinition(trigger=SingleKey(mods=2, key=118), definition='enter_scroll_mode'),
+    # enter_scroll_search
+    KeyDefinition(trigger=SingleKey(mods=2, key=115), definition='enter_scroll_search'),
+    # enter_scroll_prompt
+    KeyDefinition(trigger=SingleKey(mods=2, key=117), definition='enter_scroll_prompt'),
     # show_last_command_output
     KeyDefinition(trigger=SingleKey(mods=256, key=103), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='show_last_command_output'),
     # search_scrollback

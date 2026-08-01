@@ -212,9 +212,20 @@ typedef struct {
         bool active;
         DnDCommand metadata;
     } dnd_chunking;
+    struct {
+        unsigned int active;
+        unsigned int x, y;
+        unsigned int sel_active;
+        unsigned int sel_start_x, sel_start_y;
+        unsigned int sel_end_x, sel_end_y;
+        bool pause_input;
+        uint8_t *pending_bytes;
+        size_t pending_capacity;
+        size_t pending_used;
+    } scroll_mode;
 } Screen;
 
-#define pixel_scroll_enabled(screen) (OPT(pixel_scroll) && !screen->paused_rendering.expires_at && screen->linebuf == screen->main_linebuf)
+#define pixel_scroll_enabled(screen) (OPT(pixel_scroll) && !screen->paused_rendering.expires_at && screen->linebuf == screen->main_linebuf && !screen->scroll_mode.active)
 #define render_lines_for_screen(screen) (screen->lines + pixel_scroll_enabled(screen))
 
 void screen_align(Screen*);

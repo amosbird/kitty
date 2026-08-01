@@ -677,10 +677,22 @@ HANDLER(handle_move_event) {
         return;
     }
     Screen *screen = w->render_data.screen;
+    // Scroll mode: dispatch drag to Python, bypass normal handling
+    if (screen && screen->scroll_mode.active) {
+        if (mouse_cell_changed && button >= 0) {
+            dispatch_mouse_event(w, button, 0, modifiers, false);
+        }
+        return;
+    }
+    bool scroll_mode_mouse = OPT(scroll_mode_mouse) && screen && screen->modes.mouse_tracking_mode == NO_TRACKING;
+    if (scroll_mode_mouse && button == GLFW_MOUSE_BUTTON_LEFT && mouse_cell_changed) {
+        dispatch_mouse_event(w, button, 0, modifiers, false);
+        if (screen->scroll_mode.active) return;
+    }
     if (OPT(detect_urls)) detect_url(screen, w->mouse_pos.cell_x, w->mouse_pos.cell_y);
     if (should_handle_in_kitty(w, screen, button)) {
         handle_mouse_movement_in_kitty(w, button, mouse_cell_changed | cell_half_changed);
-    } else {
+    } else if (!scroll_mode_mouse) {
         if (mouse_cell_changed || screen->modes.mouse_tracking_protocol == SGR_PIXEL_PROTOCOL) {
             int sz = encode_mouse_button(w, button, button >=0 ? DRAG : MOVE, modifiers);
             if (sz > 0) { mouse_event_buf[sz] = 0; write_escape_code_to_child(screen, ESC_CSI, mouse_event_buf); }
@@ -757,7 +769,10 @@ add_press(Window *w, int button, int modifiers) {
     Screen *screen = w->render_data.screen;
     int count = multi_click_count(w, button);
     if (count > 1) {
-        if (screen) dispatch_mouse_event(w, button, count, modifiers, screen->modes.mouse_tracking_mode != 0);
+        if (screen) {
+            bool scroll_mode_mouse = OPT(scroll_mode_mouse) && screen->modes.mouse_tracking_mode == NO_TRACKING;
+            dispatch_mouse_event(w, button, count, modifiers, screen->modes.mouse_tracking_mode != NO_TRACKING && !scroll_mode_mouse);
+        }
         if (count > 2) q->length = 0;
     }
 }
@@ -855,7 +870,8 @@ dispatch_possible_click(Window *w, int button, int modifiers) {
         pc->button = button;
         pc->count = count == 2 ? -3 : -2;
         pc->modifiers = modifiers;
-        pc->grabbed = screen->modes.mouse_tracking_mode != 0;
+        bool scroll_mode_mouse = OPT(scroll_mode_mouse) && screen->modes.mouse_tracking_mode == NO_TRACKING;
+        pc->grabbed = screen->modes.mouse_tracking_mode != NO_TRACKING && !scroll_mode_mouse;
         pc->radius_for_multiclick = radius_for_multiclick();
         add_main_loop_timer(OPT(click_interval), false, dispatch_pending_clicks, NULL, NULL);
     }
@@ -890,9 +906,26 @@ HANDLER(handle_button_event) {
             w->drag_source.initial_left_press.at = monotonic();
         }
     }
+
+    if (screen->scroll_mode.active) {
+        if (!is_release && button >= 0 && button < (ssize_t)arraysz(w->click_queues)) {
+            ClickQueue *q = &w->click_queues[button];
+            if (q->length == CLICK_QUEUE_SZ) { memmove(q->clicks, q->clicks + 1, sizeof(Click) * (CLICK_QUEUE_SZ - 1)); q->length--; }
+            q->clicks[q->length] = (Click){.at = monotonic(), .button = button,
+                .modifiers = modifiers & ~GLFW_LOCK_MASK,
+                .x = MAX(0, w->mouse_pos.global_x), .y = MAX(0, w->mouse_pos.global_y)};
+            q->length++;
+            int count = multi_click_count(w, button);
+            if (count < 1) count = 1;
+            dispatch_mouse_event(w, button, count, modifiers, false);
+            if (count > 2 || !screen->scroll_mode.active) q->length = 0;
+        }
+        return;
+    }
     id_type wid = w->id;
-    if (!dispatch_mouse_event(w, button, is_release ? -1 : 1, modifiers, screen->modes.mouse_tracking_mode != 0)) {
-        if (screen->modes.mouse_tracking_mode != 0) {
+    bool scroll_mode_mouse = OPT(scroll_mode_mouse) && screen->modes.mouse_tracking_mode == NO_TRACKING;
+    if (!dispatch_mouse_event(w, button, is_release ? -1 : 1, modifiers, screen->modes.mouse_tracking_mode != NO_TRACKING && !scroll_mode_mouse)) {
+        if (screen->modes.mouse_tracking_mode != NO_TRACKING && !scroll_mode_mouse) {
             int sz = encode_mouse_button(w, button, is_release ? RELEASE : PRESS, modifiers);
             if (sz > 0) { mouse_event_buf[sz] = 0; write_escape_code_to_child(screen, ESC_CSI, mouse_event_buf); }
         }
@@ -1535,7 +1568,29 @@ scroll_event(const GLFWScrollEvent *ev) {
     }
     finish_scroll_animation(screen);
     if (ev->y_offset != 0.0) {
-        if (screen->modes.mouse_tracking_mode == NO_TRACKING && pixel_scroll_enabled_for_screen(screen) && (ev->offset_type == GLFW_SCROLL_OFFEST_HIGHRES || ev->offset_type == GLFW_SCROLL_OFFEST_V120)) {
+        if (screen->scroll_mode.active) {
+            int s = scale_scroll(NO_TRACKING, ev->y_offset, ev->offset_type, &screen->pending_scroll_pixels_y, global_state.callback_os_window->fonts_data->fcm.cell_height);
+            if (s) {
+                bool upwards = s > 0;
+                screen_history_scroll(screen, abs(s), upwards);
+                if (screen->scroll_mode.y >= screen->lines) screen->scroll_mode.y = screen->lines - 1;
+                screen->is_dirty = true;
+                call_boss(scroll_mode_from_mouse_scroll, "KiI", w->id,
+                          upwards ? abs(s) : -abs(s), screen->scroll_mode.y);
+            }
+        } else if (OPT(scroll_mode_mouse) && screen->modes.mouse_tracking_mode == NO_TRACKING) {
+            int s = scale_scroll(NO_TRACKING, ev->y_offset, ev->offset_type, &screen->pending_scroll_pixels_y, global_state.callback_os_window->fonts_data->fcm.cell_height);
+            if (s) {
+                bool upwards = s > 0;
+                if (screen->linebuf == screen->main_linebuf) {
+                    screen_history_scroll(screen, abs(s), upwards);
+                    if (screen->selections.in_progress) update_drag(w);
+                } else {
+                    fake_scroll(w, abs(s), upwards);
+                }
+                if (upwards) call_boss(scroll_mode_from_mouse, "Ki", w->id, (int)w->mouse_pos.cell_y);
+            }
+        } else if (screen->modes.mouse_tracking_mode == NO_TRACKING && pixel_scroll_enabled_for_screen(screen) && (ev->offset_type == GLFW_SCROLL_OFFEST_HIGHRES || ev->offset_type == GLFW_SCROLL_OFFEST_V120)) {
             double delta_pixels;
             if (ev->offset_type == GLFW_SCROLL_OFFEST_HIGHRES) {
                 delta_pixels = ev->y_offset * OPT(touch_scroll_multiplier);
@@ -1558,13 +1613,14 @@ scroll_event(const GLFWScrollEvent *ev) {
                         }
                     }
                 } else {
-                        if (screen->linebuf == screen->main_linebuf) {
-                            screen_history_scroll(screen, abs(s), upwards);
-                            if (screen->selections.in_progress) update_drag(w);
-                        }
-                        else fake_scroll(w, abs(s), upwards);
+                    if (screen->linebuf == screen->main_linebuf) {
+                        screen_history_scroll(screen, abs(s), upwards);
+                        if (screen->selections.in_progress) update_drag(w);
+                    } else {
+                        fake_scroll(w, abs(s), upwards);
                     }
                 }
+            }
         }
     }
     if (ev->x_offset != 0.0) {

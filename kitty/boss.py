@@ -1670,6 +1670,9 @@ class Boss:
         self.mappings.push_keyboard_mode(new_mode)
 
     def dispatch_possible_special_key(self, ev: KeyEvent) -> bool:
+        w = self.active_window
+        if w is not None and w.scroll_mode.active:
+            return w.scroll_mode.handle_key(ev)
         return self.mappings.dispatch_possible_special_key(ev)
 
     def on_shortcut_key_release(self, ev: KeyEvent) -> bool:
@@ -1677,6 +1680,27 @@ class Boss:
         if window is not None:
             window.finish_scroll_animation()
         return False
+
+    def scroll_mode_from_mouse(self, window_id: int, cell_y: int) -> None:
+        w = self.window_id_map.get(window_id)
+        if w is not None and not w.scroll_mode.active:
+            w.scroll_mode.enter(w, silent=True)
+            if w.scroll_mode.active:
+                screen = w.screen
+                vt = screen.historybuf.count - screen.scrolled_by
+                w.scroll_mode._move_cursor_to(vt + cell_y, 0)
+
+    def scroll_mode_from_mouse_scroll(self, window_id: int, delta: int, clamped_y: int) -> None:
+        w = self.window_id_map.get(window_id)
+        if w is not None and w.scroll_mode.active:
+            screen = w.screen
+            if screen.scrolled_by == 0 and delta < 0:
+                w.scroll_mode.exit()
+                return
+            vt = screen.historybuf.count - screen.scrolled_by
+            w.scroll_mode._cursor_abs = vt + clamped_y
+            w.scroll_mode._sync_cursor()
+            w.scroll_mode._mark_dirty()
 
     def cancel_current_visual_select(self) -> None:
         if self.current_visual_select:
