@@ -2185,8 +2185,11 @@ class Boss:
             tm.destroy()
         for window_id in tuple(w.id for w in self.window_id_map.values() if getattr(w, 'os_window_id', None) == os_window_id):
             self.window_id_map.pop(window_id, None)
-        if not self.os_window_map and is_macos:
-            cocoa_set_menubar_title('')
+        if not self.os_window_map:
+            if is_macos:
+                cocoa_set_menubar_title('')
+            if grab_keyboard(None):
+                grab_keyboard(False)
         action = self.os_window_death_actions.pop(os_window_id, None)
         if action is not None:
             action()
