@@ -154,6 +154,7 @@ glfw_key_for_sym(xkb_keysym_t key) {
         case XKB_KEY_Meta_R: return GLFW_FKEY_RIGHT_META;
         case XKB_KEY_ISO_Level3_Shift: return GLFW_FKEY_ISO_LEVEL3_SHIFT;
         case XKB_KEY_ISO_Level5_Shift: return GLFW_FKEY_ISO_LEVEL5_SHIFT;
+        case XKB_KEY_Eisu_toggle: return GLFW_FKEY_KP_EQUAL;
 /* end xkb to glfw */
         default:
             return xkb_keysym_to_utf32(key);
