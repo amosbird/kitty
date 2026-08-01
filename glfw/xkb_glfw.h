@@ -33,6 +33,7 @@
 #endif
 
 #include "ibus_glfw.h"
+#include "fcitx5_glfw.h"
 
 typedef struct {
     struct xkb_state*       state;
@@ -68,6 +69,7 @@ typedef struct {
     xkb_mod_mask_t          numLockMask;
     xkb_mod_index_t         unknownModifiers[256];
     _GLFWIBUSData           ibus;
+    _GLFWFcitx5Data         fcitx5;
 
 #ifdef _GLFW_X11
     int32_t                 keyboard_device_id;
@@ -98,4 +100,4 @@ void glfw_xkb_handle_key_event(_GLFWwindow *window, _GLFWXKBData *xkb, xkb_keyco
 int glfw_xkb_keysym_from_name(const char *name, bool case_sensitive);
 void glfw_xkb_update_ime_state(_GLFWwindow *w, _GLFWXKBData *xkb, const GLFWIMEUpdateEvent *ev);
 void glfw_xkb_key_from_ime(_GLFWIBUSKeyEvent *ev, bool handled_by_ime, bool failed);
-void glfw_xkb_forwarded_key_from_ime(xkb_keysym_t keysym, unsigned int glfw_mods);
+void glfw_xkb_forwarded_key_from_ime(xkb_keysym_t keysym, unsigned int glfw_mods, int action);

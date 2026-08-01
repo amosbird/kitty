@@ -201,7 +201,7 @@ handle_ibus_forward_key_event(DBusMessage *msg) {
     int mods = glfw_modifiers_from_ibus_state(state);
 
     debug("IBUS: ForwardKeyEvent: keysym=%x, keycode=%x, state=%x, glfw_mods=%x\n", keysym, keycode, state, mods);
-    glfw_xkb_forwarded_key_from_ime(keysym, mods);
+    glfw_xkb_forwarded_key_from_ime(keysym, mods, state & IBUS_RELEASE_MASK ? GLFW_RELEASE : GLFW_PRESS);
 }
 
 static void

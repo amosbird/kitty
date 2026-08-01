@@ -569,6 +569,9 @@ def load_watch_modules(watchers: Iterable[str]) -> Watchers | None:
         w = m.get('on_quit')
         if callable(w):
             ans.on_quit.append(w)
+        w = m.get('on_input_method_changed')
+        if callable(w):
+            ans.on_input_method_changed.append(w)
     return ans
 
 

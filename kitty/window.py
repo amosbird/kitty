@@ -342,6 +342,7 @@ class Watchers:
     on_color_scheme_preference_change: list[Watcher]
     on_tab_bar_dirty: list[Watcher]
     on_quit: list[Watcher]
+    on_input_method_changed: list[Watcher]
 
     def __init__(self) -> None:
         self.on_resize = []
@@ -353,6 +354,7 @@ class Watchers:
         self.on_color_scheme_preference_change = []
         self.on_tab_bar_dirty = []
         self.on_quit = []
+        self.on_input_method_changed = []
 
     def add(self, others: 'Watchers') -> None:
         def merge(base: list[Watcher], other: list[Watcher]) -> None:
@@ -369,6 +371,7 @@ class Watchers:
         merge(self.on_color_scheme_preference_change, others.on_color_scheme_preference_change)
         merge(self.on_tab_bar_dirty, others.on_tab_bar_dirty)
         merge(self.on_quit, others.on_quit)
+        merge(self.on_input_method_changed, others.on_input_method_changed)
 
     def clear(self) -> None:
         del self.on_close[:], self.on_resize[:], self.on_focus_change[:]
@@ -376,6 +379,7 @@ class Watchers:
         del self.on_color_scheme_preference_change[:]
         del self.on_tab_bar_dirty[:]
         del self.on_quit[:]
+        del self.on_input_method_changed[:]
 
     def copy(self) -> 'Watchers':
         ans = Watchers()
@@ -388,6 +392,7 @@ class Watchers:
         ans.on_color_scheme_preference_change = self.on_color_scheme_preference_change[:]
         ans.on_tab_bar_dirty = self.on_tab_bar_dirty[:]
         ans.on_quit = self.on_quit[:]
+        ans.on_input_method_changed = self.on_input_method_changed[:]
         return ans
 
     @property
@@ -402,6 +407,7 @@ class Watchers:
             or self.on_cmd_startstop
             or self.on_tab_bar_dirty
             or self.on_quit
+            or self.on_input_method_changed
         )
 
 
@@ -1538,6 +1544,10 @@ class Window:
         elif self.os_window_id == current_focused_os_window_id():
             # Cancel IME composition after loses focus
             update_ime_position_for_window(self.id, False, -1)
+
+    def input_method_changed(self, im_name: str) -> None:
+        if not self.destroyed:
+            call_watchers(weakref.ref(self), 'on_input_method_changed', {'im_name': im_name})
 
     def title_changed(self, new_title: memoryview | None, is_base64: bool = False) -> None:
         self.child_title = process_title_from_child(new_title or memoryview(b''), is_base64, self.default_title)

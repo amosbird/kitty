@@ -259,6 +259,10 @@ on_key_input(const GLFWkeyevent *ev) {
             } else debug("committed pre-edit text: (null)\n");
             screen_update_overlay_text(screen, NULL);
             return;
+        case GLFW_IME_INPUT_METHOD_CHANGED:
+            debug("input method changed to: '%s'\n", text);
+            call_boss(on_input_method_changed, "Ks", global_state.callback_os_window->id, text);
+            return;
         case GLFW_IME_NONE:
             // for macOS, update ime position on every key input
             // because the position is required before next input
