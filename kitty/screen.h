@@ -144,6 +144,7 @@ typedef struct {
     uint8_t *write_buf;
     size_t write_buf_sz, write_buf_used;
     pthread_mutex_t write_buf_lock;
+    pthread_mutex_t scroll_mode_lock;
 
     CursorRenderInfo cursor_render_info;
 

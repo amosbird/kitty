@@ -3,7 +3,7 @@
 
 from unittest.mock import patch
 
-from kitty.fast_data_types import MOVE, Screen, send_mouse_event
+from kitty.fast_data_types import GLFW_FKEY_ESCAPE, GLFW_PRESS, KeyEvent, MOVE, Screen, send_mouse_event
 
 from . import BaseTest, parse_bytes
 
@@ -44,6 +44,73 @@ class TestScrollMode(BaseTest):
             self.assertTrue(mode.active)
             mode.exit()
             self.assertFalse(mode.active)
+
+    def test_escape_yanks_selection_and_exits(self):
+        from kitty.scroll_mode import ScrollMode, ScrollModeState
+
+        class Window:
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        screen = self.create_screen()
+        parse_bytes(screen, b'hello')
+        mode = ScrollMode()
+        mode._window = Window(screen)
+        mode.active = True
+        mode.state = ScrollModeState.SELECT
+        mode._sel_mode = 'char'
+        mode._sel_start_abs = mode._cursor_abs = 0
+        mode._sel_start_x = 0
+        mode._cursor_x = 4
+        event = KeyEvent(GLFW_FKEY_ESCAPE, action=GLFW_PRESS)
+
+        with patch('kitty.clipboard.set_clipboard_string') as set_clipboard, patch.object(mode, 'exit') as exit_mode:
+            self.assertTrue(mode.handle_key(event))
+            set_clipboard.assert_called_once_with('hello')
+            exit_mode.assert_called_once_with()
+
+    def test_scroll_logic_does_not_hide_unexpected_errors(self):
+        from kitty.scroll_mode import ScrollMode
+
+        mode = ScrollMode()
+        mode._window = object()
+        mode._search_query = 'needle'
+        mode._total_lines_override = 1
+        with patch.object(type(mode), '_total_lines', new_callable=lambda: property(lambda self: 1)), patch.object(
+            mode, '_get_line_text', side_effect=RuntimeError('broken line access')
+        ):
+            with self.assertRaisesRegex(RuntimeError, 'broken line access'):
+                mode._find_all_matches()
+
+    def test_navigation_search_and_mouse_drag(self):
+        from kitty.scroll_mode import ScrollMode, ScrollModeState
+
+        class Window:
+            id = 1
+
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+            def current_mouse_position(self):
+                return {'cell_x': 3, 'cell_y': 1}
+
+        screen = self.create_screen(cols=8, lines=3)
+        parse_bytes(screen, b'one\r\ntwo')
+        mode = ScrollMode()
+        mode._window = Window(screen)
+        mode.active = True
+        mode._cursor_abs = 0
+        mode._move_cursor(1, 2)
+        self.assertEqual((mode._cursor_abs, mode._cursor_x), (1, 2))
+
+        mode._search_query = 'two'
+        self.assertEqual(mode._find_all_matches(), [(1, 0)])
+
+        mode._drag_active = True
+        mode._cursor_abs = mode._cursor_x = 0
+        self.assertTrue(mode.handle_mouse(mode._window, 0, 0))
+        self.assertEqual(mode.state, ScrollModeState.SELECT)
+        self.assertEqual((mode._cursor_abs, mode._cursor_x), (1, 3))
 
     def test_app_mouse_tracking_takes_precedence(self):
         screen = self.create_screen(options={'scroll_mode_mouse': True})

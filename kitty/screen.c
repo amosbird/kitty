@@ -114,7 +114,14 @@ new_screen_object(PyTypeObject *type, PyObject *args, PyObject UNUSED *kwds) {
     self = (Screen *)type->tp_alloc(type, 0);
     if (self != NULL) {
         if ((ret = pthread_mutex_init(&self->write_buf_lock, NULL)) != 0) {
-            Py_CLEAR(self); PyErr_Format(PyExc_RuntimeError, "Failed to create Screen write_buf_lock mutex: %s", strerror(ret));
+            Py_TYPE(self)->tp_free((PyObject*)self);
+            PyErr_Format(PyExc_RuntimeError, "Failed to create Screen write_buf_lock mutex: %s", strerror(ret));
+            return NULL;
+        }
+        if ((ret = pthread_mutex_init(&self->scroll_mode_lock, NULL)) != 0) {
+            pthread_mutex_destroy(&self->write_buf_lock);
+            Py_TYPE(self)->tp_free((PyObject*)self);
+            PyErr_Format(PyExc_RuntimeError, "Failed to create Screen scroll_mode_lock mutex: %s", strerror(ret));
             return NULL;
         }
         self->vt_parser = alloc_vt_parser(window_id);
@@ -672,6 +679,8 @@ reset_callbacks(Screen *self, PyObject *a UNUSED) {
 
 static void
 dealloc(Screen* self) {
+    free(self->scroll_mode.pending_bytes);
+    pthread_mutex_destroy(&self->scroll_mode_lock);
     pthread_mutex_destroy(&self->write_buf_lock);
     free_vt_parser(self->vt_parser); self->vt_parser = NULL;
     self->text_cache = tc_decref(self->text_cache);
@@ -6247,14 +6256,18 @@ static PyObject*
 set_scroll_pause(Screen *self, PyObject *args) {
     int pause;
     if (!PyArg_ParseTuple(args, "p", &pause)) return NULL;
+    pthread_mutex_lock(&self->scroll_mode_lock);
     if (pause) {
-        // Buffer size: scrollback lines * columns * ~6 bytes/char, minimum 1MB
-        size_t capacity = (size_t)self->historybuf->ynum * self->columns * 6;
-        if (capacity < 1024 * 1024) capacity = 1024 * 1024;
+        // shortcut: start at 1 MiB and grow on demand up to the child monitor's 100 MiB limit
+        size_t capacity = 1024 * 1024;
         if (!self->scroll_mode.pending_bytes || self->scroll_mode.pending_capacity != capacity) {
             free(self->scroll_mode.pending_bytes);
             self->scroll_mode.pending_bytes = calloc(capacity, 1);
-            if (!self->scroll_mode.pending_bytes) { self->scroll_mode.pending_capacity = 0; return PyErr_NoMemory(); }
+            if (!self->scroll_mode.pending_bytes) {
+                self->scroll_mode.pending_capacity = 0;
+                pthread_mutex_unlock(&self->scroll_mode_lock);
+                return PyErr_NoMemory();
+            }
             self->scroll_mode.pending_capacity = capacity;
         }
         self->scroll_mode.pending_used = 0;
@@ -6262,33 +6275,39 @@ set_scroll_pause(Screen *self, PyObject *args) {
     } else {
         self->scroll_mode.pause_input = false;
     }
+    pthread_mutex_unlock(&self->scroll_mode_lock);
     Py_RETURN_NONE;
 }
 
 static PyObject*
 flush_scroll_pending(Screen *self, PyObject *args UNUSED) {
-    if (self->scroll_mode.pending_bytes && self->scroll_mode.pending_used > 0) {
+    pthread_mutex_lock(&self->scroll_mode_lock);
+    self->scroll_mode.pause_input = false;
+    uint8_t *pending_bytes = self->scroll_mode.pending_bytes;
+    size_t pending_used = self->scroll_mode.pending_used;
+    self->scroll_mode.pending_bytes = NULL;
+    self->scroll_mode.pending_used = 0;
+    self->scroll_mode.pending_capacity = 0;
+    pthread_mutex_unlock(&self->scroll_mode_lock);
+    if (pending_bytes && pending_used > 0) {
         size_t offset = 0;
         ParseData pd = {.now = monotonic()};
-        while (offset < self->scroll_mode.pending_used) {
+        while (offset < pending_used) {
             size_t available;
             uint8_t *buf = vt_parser_create_write_buffer(self->vt_parser, &available);
             if (!available) {
                 parse_worker(self, &pd, true);
                 continue;
             }
-            size_t to_copy = self->scroll_mode.pending_used - offset;
+            size_t to_copy = pending_used - offset;
             if (to_copy > available) to_copy = available;
-            memcpy(buf, self->scroll_mode.pending_bytes + offset, to_copy);
+            memcpy(buf, pending_bytes + offset, to_copy);
             vt_parser_commit_write(self->vt_parser, to_copy);
             offset += to_copy;
         }
-        self->scroll_mode.pending_used = 0;
         parse_worker(self, &pd, true);
     }
-    free(self->scroll_mode.pending_bytes);
-    self->scroll_mode.pending_bytes = NULL;
-    self->scroll_mode.pending_capacity = 0;
+    free(pending_bytes);
     self->is_dirty = true;
     Py_RETURN_NONE;
 }

@@ -151,9 +151,8 @@ class ScrollMode:
             screen.set_scroll_cursor(0, 0, 0)
             screen.set_scroll_selection(0, 0, 0, 0, 0)
             self._clear_search_marker()
-            # Flush buffered output, then unpause and scroll to bottom
+            # Flush buffered output, then scroll to bottom
             screen.flush_scroll_pending()
-            screen.set_scroll_pause(False)
             screen.scroll(SCROLL_FULL, False)
             if self._is_alt_screen:
                 screen.toggle_alt_screen()
@@ -193,7 +192,7 @@ class ScrollMode:
                 if _PROMPT_PATTERN.search(text):
                     found_line = abs_line
                     break
-            except (IndexError, Exception):
+            except IndexError:
                 continue
         self._window = None
         if found_line < 0:
@@ -464,7 +463,7 @@ class ScrollMode:
                         break
                     matches.append((abs_line, col))
                     start = col + 1
-            except (IndexError, Exception):
+            except IndexError:
                 continue
         return matches
 
@@ -492,7 +491,7 @@ class ScrollMode:
                 self._cursor_x = col
                 self._sync_cursor()
                 return
-        except (IndexError, Exception):
+        except IndexError:
             pass
         self._jump_to_match(self._search_backwards)
 
@@ -515,7 +514,7 @@ class ScrollMode:
                     self._sync_cursor()
                     self._mark_dirty()
                     return
-            except (IndexError, Exception):
+            except IndexError:
                 pass
             # Search upward
             for abs_line in range(cur - 1, -1, -1):
@@ -525,7 +524,7 @@ class ScrollMode:
                     if col >= 0:
                         self._move_cursor_to(abs_line, col)
                         return
-                except (IndexError, Exception):
+                except IndexError:
                     continue
             # Wrap from bottom
             for abs_line in range(total - 1, cur - 1, -1):
@@ -535,7 +534,7 @@ class ScrollMode:
                     if col >= 0:
                         self._move_cursor_to(abs_line, col)
                         return
-                except (IndexError, Exception):
+                except IndexError:
                     continue
         else:
             # Search current line after cursor
@@ -547,7 +546,7 @@ class ScrollMode:
                     self._sync_cursor()
                     self._mark_dirty()
                     return
-            except (IndexError, Exception):
+            except IndexError:
                 pass
             # Search downward
             for abs_line in range(cur + 1, total):
@@ -557,7 +556,7 @@ class ScrollMode:
                     if col >= 0:
                         self._move_cursor_to(abs_line, col)
                         return
-                except (IndexError, Exception):
+                except IndexError:
                     continue
             # Wrap from top
             for abs_line in range(0, cur + 1):
@@ -567,7 +566,7 @@ class ScrollMode:
                     if col >= 0:
                         self._move_cursor_to(abs_line, col)
                         return
-                except (IndexError, Exception):
+                except IndexError:
                     continue
 
     # }}}
@@ -587,7 +586,7 @@ class ScrollMode:
                     if _PROMPT_PATTERN.search(text):
                         self._move_cursor_to(abs_line, 0)
                         return
-                except (IndexError, Exception):
+                except IndexError:
                     continue
             # Wrap from bottom
             for abs_line in range(total - 1, cur - 1, -1):
@@ -596,7 +595,7 @@ class ScrollMode:
                     if _PROMPT_PATTERN.search(text):
                         self._move_cursor_to(abs_line, 0)
                         return
-                except (IndexError, Exception):
+                except IndexError:
                     continue
         else:
             for abs_line in range(cur + 1, total):
@@ -605,7 +604,7 @@ class ScrollMode:
                     if _PROMPT_PATTERN.search(text):
                         self._move_cursor_to(abs_line, 0)
                         return
-                except (IndexError, Exception):
+                except IndexError:
                     continue
             # Wrap from top
             for abs_line in range(0, cur + 1):
@@ -614,7 +613,7 @@ class ScrollMode:
                     if _PROMPT_PATTERN.search(text):
                         self._move_cursor_to(abs_line, 0)
                         return
-                except (IndexError, Exception):
+                except IndexError:
                     continue
 
     # }}}
@@ -745,7 +744,7 @@ class ScrollMode:
             return
         try:
             text = self._get_line_text(self._cursor_abs)
-        except (IndexError, Exception):
+        except IndexError:
             return
         cols = self._window.screen.columns
         x = self._cursor_x
@@ -979,14 +978,9 @@ class ScrollMode:
         key = ev.key
         mods = ev.mods
 
-        # Escape: cancel selection
+        # Escape: yank selection and exit
         if key == GLFW_FKEY_ESCAPE and not mods:
-            self._sel_mode = None
-            self.state = ScrollModeState.NAVIGATE
-            if self._window:
-                self._window.screen.set_scroll_selection(0, 0, 0, 0, 0)
-            self._sync_cursor()
-            self._mark_dirty()
+            self._yank_selection()
             return True
 
         # q: exit scroll mode entirely
@@ -1066,7 +1060,7 @@ class ScrollMode:
         x = self._cursor_x
         try:
             text = self._get_line_text(line_abs)
-        except (IndexError, Exception):
+        except IndexError:
             return
 
         def _is_word_char(ch: str) -> bool:
@@ -1083,7 +1077,7 @@ class ScrollMode:
                     x = 0
                     try:
                         text = self._get_line_text(line_abs)
-                    except (IndexError, Exception):
+                    except IndexError:
                         return
                 while x < len(text) and x < cols and not _is_word_char(text[x]):
                     x += 1
@@ -1107,7 +1101,7 @@ class ScrollMode:
                 x = 0
                 try:
                     text = self._get_line_text(line_abs)
-                except (IndexError, Exception):
+                except IndexError:
                     return
 
         self._move_cursor_to(line_abs, x)
@@ -1120,7 +1114,7 @@ class ScrollMode:
         x = self._cursor_x
         try:
             text = self._get_line_text(line_abs)
-        except (IndexError, Exception):
+        except IndexError:
             return
 
         def _is_word_char(ch: str) -> bool:
@@ -1134,7 +1128,7 @@ class ScrollMode:
                     return
                 try:
                     text = self._get_line_text(line_abs)
-                except (IndexError, Exception):
+                except IndexError:
                     return
                 x = len(text) - 1
                 if x < 0:
@@ -1182,7 +1176,7 @@ class ScrollMode:
                 try:
                     line = self._get_line_text(i)
                     lines.append(line[x_left:x_right + 1].rstrip())
-                except (IndexError, Exception):
+                except IndexError:
                     continue
             return '\n'.join(lines)
 
@@ -1206,7 +1200,7 @@ class ScrollMode:
                     elif i == end_abs:
                         line = line[:end_x + 1]
                 lines.append(line.rstrip())
-            except (IndexError, Exception):
+            except IndexError:
                 continue
         return '\n'.join(lines)
 

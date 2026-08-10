@@ -179,6 +179,8 @@ consumption to do the same tasks.
 Detailed list of changes
 -------------------------------------
 
+- Scroll mode: make :kbd:`Escape` copy the active selection and exit, and safely buffer child output while browsing scrollback.
+
 
 0.48.2 [2026-07-30]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
