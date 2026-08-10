@@ -1160,6 +1160,30 @@ class ScrollMode:
         else:
             return str(screen.linebuf.line(abs_line - h_count))
 
+    def _line_is_continued(self, abs_line: int) -> bool:
+        """Return whether this visual line continues the preceding line."""
+        if self._window is None or abs_line <= 0:
+            return False
+        screen = self._window.screen
+        if abs_line >= screen.historybuf.count + screen.lines:
+            return False
+        h_count = screen.historybuf.count
+        if abs_line < h_count:
+            return screen.historybuf.is_continued(abs_line)
+        linebuf_y = abs_line - h_count
+        if linebuf_y:
+            return screen.linebuf.is_continued(linebuf_y)
+        return bool(h_count and screen.historybuf.endswith_wrap())
+
+    @staticmethod
+    def _join_selected_lines(lines: List[Tuple[str, bool]]) -> str:
+        ans = ''
+        for text, continued in lines:
+            if ans and not continued:
+                ans += '\n'
+            ans += text
+        return ans
+
     def _get_selected_text(self) -> str:
         """Extract the text within the current visual selection."""
         if self._sel_mode is None:
@@ -1176,7 +1200,8 @@ class ScrollMode:
             for i in range(start_abs, end_abs + 1):
                 try:
                     line = self._get_line_text(i)
-                    lines.append(line[x_left:x_right + 1].rstrip())
+                    text = line[x_left:x_right + 1]
+                    lines.append(text if self._line_is_continued(i + 1) else text.rstrip())
                 except IndexError:
                     continue
             return '\n'.join(lines)
@@ -1189,21 +1214,24 @@ class ScrollMode:
         else:
             start_x, end_x = self._cursor_x, self._sel_start_x
 
-        lines = []
+        lines: List[Tuple[str, bool]] = []
         for i in range(start_abs, end_abs + 1):
             try:
                 line = self._get_line_text(i)
+                text = line
                 if self._sel_mode == 'char':
                     if i == start_abs and i == end_abs:
-                        line = line[start_x:end_x + 1]
+                        text = line[start_x:end_x + 1]
                     elif i == start_abs:
-                        line = line[start_x:]
+                        text = line[start_x:]
                     elif i == end_abs:
-                        line = line[:end_x + 1]
-                lines.append(line.rstrip())
+                        text = line[:end_x + 1]
+                if not self._line_is_continued(i + 1):
+                    text = text.rstrip()
+                lines.append((text, i > start_abs and self._line_is_continued(i)))
             except IndexError:
                 continue
-        return '\n'.join(lines)
+        return self._join_selected_lines(lines)
 
     def _yank_selection(self, stay: bool = False) -> None:
         """Copy selection to clipboard. If stay is False, exit scroll mode."""

@@ -69,6 +69,36 @@ class TestScrollMode(BaseTest):
             set_clipboard.assert_called_once_with('hello')
             exit_mode.assert_called_once_with()
 
+    def test_selection_joins_soft_wrapped_lines(self):
+        from kitty.scroll_mode import ScrollMode
+
+        class Window:
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        screen = self.create_screen(cols=5, lines=4)
+        parse_bytes(screen, b'abcdefgh\r\nij')
+        mode = ScrollMode()
+        mode._window = Window(screen)
+        mode._sel_mode = 'char'
+        mode._sel_start_abs = 0
+        mode._sel_start_x = 0
+        mode._cursor_abs = 2
+        mode._cursor_x = 1
+        self.assertEqual(mode._get_selected_text(), 'abcdefgh\nij')
+
+        screen.reset()
+        parse_bytes(screen, b'1234 5\r\nij')
+        mode._cursor_abs = 2
+        self.assertEqual(mode._get_selected_text(), '1234 5\nij')
+
+        screen = self.create_screen(cols=5, lines=2, scrollback=4)
+        parse_bytes(screen, b'abcdefghijklm')
+        mode._window = Window(screen)
+        mode._cursor_abs = 2
+        mode._cursor_x = 2
+        self.assertEqual(mode._get_selected_text(), 'abcdefghijklm')
+
     def test_exit_flushes_output_before_resuming_io(self):
         from kitty.scroll_mode import ScrollMode
 
