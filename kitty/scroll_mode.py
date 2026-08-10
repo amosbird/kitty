@@ -151,8 +151,9 @@ class ScrollMode:
             screen.set_scroll_cursor(0, 0, 0)
             screen.set_scroll_selection(0, 0, 0, 0, 0)
             self._clear_search_marker()
-            # Flush buffered output, then scroll to bottom
+            # Flush buffered output before allowing the IO thread to resume
             screen.flush_scroll_pending()
+            screen.set_scroll_pause(False)
             screen.scroll(SCROLL_FULL, False)
             if self._is_alt_screen:
                 screen.toggle_alt_screen()

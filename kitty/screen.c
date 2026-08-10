@@ -6282,7 +6282,6 @@ set_scroll_pause(Screen *self, PyObject *args) {
 static PyObject*
 flush_scroll_pending(Screen *self, PyObject *args UNUSED) {
     pthread_mutex_lock(&self->scroll_mode_lock);
-    self->scroll_mode.pause_input = false;
     uint8_t *pending_bytes = self->scroll_mode.pending_bytes;
     size_t pending_used = self->scroll_mode.pending_used;
     self->scroll_mode.pending_bytes = NULL;

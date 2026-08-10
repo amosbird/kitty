@@ -69,6 +69,47 @@ class TestScrollMode(BaseTest):
             set_clipboard.assert_called_once_with('hello')
             exit_mode.assert_called_once_with()
 
+    def test_exit_flushes_output_before_resuming_io(self):
+        from kitty.scroll_mode import ScrollMode
+
+        calls = []
+
+        class Screen:
+            def set_scroll_cursor(self, *args):
+                pass
+
+            def set_scroll_selection(self, *args):
+                pass
+
+            def set_marker(self, *args):
+                pass
+
+            def flush_scroll_pending(self):
+                calls.append('flush')
+
+            def set_scroll_pause(self, pause):
+                calls.append(('pause', pause))
+
+            def scroll(self, *args):
+                pass
+
+        class Window:
+            screen = Screen()
+
+        class ChildMonitor:
+            def wakeup(self):
+                pass
+
+        class Boss:
+            child_monitor = ChildMonitor()
+
+        mode = ScrollMode()
+        mode._window = Window()
+        mode.active = True
+        with patch('kitty.scroll_mode.get_boss', return_value=Boss()):
+            mode.exit()
+        self.assertEqual(calls, ['flush', ('pause', False)])
+
     def test_scroll_logic_does_not_hide_unexpected_errors(self):
         from kitty.scroll_mode import ScrollMode
 
