@@ -80,7 +80,6 @@ class ScrollMode:
         self.state = ScrollModeState.NAVIGATE
         self._window: Optional['Window'] = None
         self._tab_manager: Optional['TabManager'] = None
-        self._is_alt_screen = False
         # Cursor position: absolute line from top of buffer (0 = oldest history line)
         self._cursor_abs = 0
         self._cursor_x = 0
@@ -105,14 +104,14 @@ class ScrollMode:
         if self._window is None:
             return 0
         screen = self._window.screen
-        return screen.historybuf.count + screen.lines
+        return (screen.historybuf.count if screen.is_main_linebuf() else 0) + screen.lines
 
     def _viewport_top(self) -> int:
         """Return the absolute line index at the top of the visible viewport."""
         if self._window is None:
             return 0
         screen = self._window.screen
-        return screen.historybuf.count - screen.scrolled_by
+        return screen.historybuf.count - screen.scrolled_by if screen.is_main_linebuf() else 0
 
     # }}}
 
@@ -127,18 +126,13 @@ class ScrollMode:
         self._sel_mode = None
         self._tab_manager = _get_tab_manager(window)
         screen = window.screen
-        # If running in alternate screen (e.g. vim), switch to main buffer
-        # which holds the scrollback history. Restored on exit.
-        self._is_alt_screen = not screen.is_main_linebuf()
-        if self._is_alt_screen:
-            screen.toggle_alt_screen()
         # Pause child output: buffer raw bytes instead of parsing them,
         # so the scrollback content stays stable while browsing.
         screen.set_scroll_pause(True)
         # Clear any normal (non-scroll-mode) selection that was in progress
         screen.clear_selection()
         # Place the scroll cursor at the terminal cursor.
-        self._cursor_abs = screen.historybuf.count + screen.cursor.y
+        self._cursor_abs = (screen.historybuf.count if screen.is_main_linebuf() else 0) + screen.cursor.y
         self._cursor_x = screen.cursor.x
         self._sync_cursor()
         if self._tab_manager is not None:
@@ -155,9 +149,6 @@ class ScrollMode:
             screen.flush_scroll_pending()
             screen.set_scroll_pause(False)
             screen.scroll(SCROLL_FULL, False)
-            if self._is_alt_screen:
-                screen.toggle_alt_screen(False, True)
-                self._is_alt_screen = False
         if self._tab_manager is not None:
             self._tab_manager.update_tab_bar_data()
             self._tab_manager.mark_tab_bar_dirty()
@@ -1149,6 +1140,8 @@ class ScrollMode:
         if self._window is None:
             return ''
         screen = self._window.screen
+        if not screen.is_main_linebuf():
+            return str(screen.linebuf.line(abs_line))
         h_count = screen.historybuf.count
         if abs_line < h_count:
             # historybuf: index 0 = newest, count-1 = oldest
@@ -1161,6 +1154,8 @@ class ScrollMode:
         if self._window is None or abs_line <= 0:
             return False
         screen = self._window.screen
+        if not screen.is_main_linebuf():
+            return screen.linebuf.is_continued(abs_line)
         if abs_line >= screen.historybuf.count + screen.lines:
             return False
         h_count = screen.historybuf.count

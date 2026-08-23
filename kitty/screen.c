@@ -2080,6 +2080,7 @@ change_pointer_shape(Screen *self, PyObject *args) {
 
 bool
 screen_is_cursor_visible(const Screen *self) {
+    if (self->scroll_mode.active) return false;
     return self->paused_rendering.expires_at ? self->paused_rendering.cursor_visible : self->modes.mDECTCEM;
 }
 
@@ -5055,7 +5056,13 @@ MODE_GETSET(color_preference_notification, COLOR_PREFERENCE_NOTIFICATION)
 MODE_GETSET(in_band_resize_notification, INBAND_RESIZE_NOTIFICATION)
 MODE_GETSET(paste_events, PASTE_EVENTS)
 MODE_GETSET(auto_repeat_enabled, DECARM)
-MODE_GETSET(cursor_visible, DECTCEM)
+static PyObject* cursor_visible_get(Screen *self, void UNUSED *closure) {
+    PyObject *ans = screen_is_cursor_visible(self) ? Py_True : Py_False; Py_INCREF(ans); return ans;
+}
+static int cursor_visible_set(Screen *self, PyObject *val, void UNUSED *closure) {
+    if (val == NULL) { PyErr_SetString(PyExc_TypeError, "Cannot delete attribute"); return -1; }
+    set_mode_from_const(self, DECTCEM, PyObject_IsTrue(val) ? true : false); return 0;
+}
 MODE_GETSET(cursor_key_mode, DECCKM)
 
 static PyObject* disable_ligatures_get(Screen *self, void UNUSED *closure) {
@@ -5925,12 +5932,8 @@ is_main_linebuf(Screen *self, PyObject *a UNUSED) {
 }
 
 static PyObject*
-toggle_alt_screen(Screen *self, PyObject *args) {
-    int clear = 1, restore_alt_cursor = 0;
-    if (!PyArg_ParseTuple(args, "|pp", &clear, &restore_alt_cursor)) return NULL;
-    if (self->linebuf == self->alt_linebuf) screen_save_cursor(self);
-    screen_toggle_screen_buffer(self, true, clear);
-    if (restore_alt_cursor && self->linebuf == self->alt_linebuf) screen_restore_cursor(self);
+toggle_alt_screen(Screen *self, PyObject *a UNUSED) {
+    screen_toggle_screen_buffer(self, true, true);
     Py_RETURN_NONE;
 }
 
@@ -6540,7 +6543,7 @@ static PyMethodDef methods[] = {
     MND(send_escape_code_to_child, METH_VARARGS)
     MND(pause_rendering, METH_VARARGS)
     MND(hyperlink_at, METH_VARARGS)
-    MND(toggle_alt_screen, METH_VARARGS)
+    MND(toggle_alt_screen, METH_NOARGS)
     MND(reset_callbacks, METH_NOARGS)
     MND(paste, METH_O)
     MND(paste_bytes, METH_O)

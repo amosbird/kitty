@@ -42,8 +42,10 @@ class TestScrollMode(BaseTest):
         with patch('kitty.scroll_mode._get_tab_manager', return_value=TabManager()), patch('kitty.scroll_mode.get_boss', return_value=Boss()):
             mode.enter(window)
             self.assertTrue(mode.active)
+            self.assertFalse(screen.cursor_visible)
             mode.exit()
             self.assertFalse(mode.active)
+            self.assertTrue(screen.cursor_visible)
 
     def test_entry_starts_at_terminal_cursor(self):
         from kitty.scroll_mode import ScrollMode
@@ -60,6 +62,26 @@ class TestScrollMode(BaseTest):
         with patch('kitty.scroll_mode._get_tab_manager', return_value=None):
             mode.enter(Window(screen))
         self.assertEqual((mode._cursor_abs, mode._cursor_x), (screen.historybuf.count + screen.cursor.y, screen.cursor.x))
+
+    def test_alt_screen_remains_visible_while_active(self):
+        from kitty.scroll_mode import ScrollMode
+
+        class Window:
+            id = 1
+
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        screen = self.create_screen(cols=10, lines=4)
+        parse_bytes(screen, b'main\x1b[?1049halt')
+        screen.cursor_position(2, 4)
+        mode = ScrollMode()
+        with patch('kitty.scroll_mode._get_tab_manager', return_value=None):
+            mode.enter(Window(screen))
+        self.assertFalse(screen.is_main_linebuf())
+        self.assertEqual(str(screen.linebuf.line(0)), 'alt')
+        self.assertEqual(mode._total_lines, screen.lines)
+        self.assertEqual((mode._cursor_abs, mode._cursor_x), (1, 3))
 
     def test_alt_screen_is_restored_after_exit(self):
         from kitty.scroll_mode import ScrollMode
@@ -83,7 +105,7 @@ class TestScrollMode(BaseTest):
         mode = ScrollMode()
         with patch('kitty.scroll_mode._get_tab_manager', return_value=None), patch('kitty.scroll_mode.get_boss', return_value=Boss()):
             mode.enter(Window(screen))
-            self.assertTrue(screen.is_main_linebuf())
+            self.assertFalse(screen.is_main_linebuf())
             mode.exit()
         self.assertFalse(screen.is_main_linebuf())
         self.assertEqual(str(screen.linebuf.line(0)), 'alt')
