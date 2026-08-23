@@ -1139,6 +1139,9 @@ class Screen:
     def is_main_linebuf(self) -> bool:
         pass
 
+    def toggle_alt_screen(self, clear: bool = True, restore_alt_cursor: bool = False) -> None:
+        pass
+
     def erase_in_line(self, mode: int = 0, private: bool = False) -> None:
         pass
 

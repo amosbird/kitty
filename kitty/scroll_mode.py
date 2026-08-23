@@ -137,9 +137,9 @@ class ScrollMode:
         screen.set_scroll_pause(True)
         # Clear any normal (non-scroll-mode) selection that was in progress
         screen.clear_selection()
-        # Place cursor at bottom of visible content
-        self._cursor_abs = screen.historybuf.count + screen.lines - 1 - screen.scrolled_by
-        self._cursor_x = 0
+        # Place the scroll cursor at the terminal cursor.
+        self._cursor_abs = screen.historybuf.count + screen.cursor.y
+        self._cursor_x = screen.cursor.x
         self._sync_cursor()
         if self._tab_manager is not None:
             self._tab_manager.mark_tab_bar_dirty()
@@ -156,7 +156,7 @@ class ScrollMode:
             screen.set_scroll_pause(False)
             screen.scroll(SCROLL_FULL, False)
             if self._is_alt_screen:
-                screen.toggle_alt_screen()
+                screen.toggle_alt_screen(False, True)
                 self._is_alt_screen = False
         if self._tab_manager is not None:
             self._tab_manager.update_tab_bar_data()
@@ -739,6 +739,11 @@ class ScrollMode:
         self._sync_cursor()
         self._mark_dirty()
 
+    def _is_word_char(self, ch: str, forward: bool = False) -> bool:
+        options = get_options()
+        extra = options.select_by_word_characters_forward if forward else ''
+        return ch.isalnum() or ch in (extra or options.select_by_word_characters)
+
     def _select_word_at_cursor(self) -> None:
         """Select the word under the cursor position."""
         if self._window is None:
@@ -752,17 +757,14 @@ class ScrollMode:
         if x >= len(text) or x >= cols:
             return
 
-        def _is_word_char(ch: str) -> bool:
-            return ch.isalnum() or ch == '_'
-
-        if not _is_word_char(text[x]):
+        if not self._is_word_char(text[x]):
             return
         # Find word boundaries
         start = x
-        while start > 0 and _is_word_char(text[start - 1]):
+        while start > 0 and self._is_word_char(text[start - 1]):
             start -= 1
         end = x
-        while end + 1 < len(text) and end + 1 < cols and _is_word_char(text[end + 1]):
+        while end + 1 < len(text) and end + 1 < cols and self._is_word_char(text[end + 1], forward=True):
             end += 1
         # Set selection: anchor at word start, cursor at word end
         self._sel_start_abs = self._cursor_abs
@@ -1064,9 +1066,6 @@ class ScrollMode:
         except IndexError:
             return
 
-        def _is_word_char(ch: str) -> bool:
-            return ch.isalnum() or ch == '_'
-
         if to_end:
             # e: skip current char, skip non-word, stop at end of word
             x += 1
@@ -1080,19 +1079,19 @@ class ScrollMode:
                         text = self._get_line_text(line_abs)
                     except IndexError:
                         return
-                while x < len(text) and x < cols and not _is_word_char(text[x]):
+                while x < len(text) and x < cols and not self._is_word_char(text[x], forward=True):
                     x += 1
                 if x >= len(text) or x >= cols:
                     continue
-                while x + 1 < len(text) and x + 1 < cols and _is_word_char(text[x + 1]):
+                while x + 1 < len(text) and x + 1 < cols and self._is_word_char(text[x + 1], forward=True):
                     x += 1
                 break
         else:
             # w: skip rest of current word, skip non-word, stop at next word start
             while True:
-                while x < len(text) and x < cols and _is_word_char(text[x]):
+                while x < len(text) and x < cols and self._is_word_char(text[x], forward=True):
                     x += 1
-                while x < len(text) and x < cols and not _is_word_char(text[x]):
+                while x < len(text) and x < cols and not self._is_word_char(text[x], forward=True):
                     x += 1
                 if x < len(text) and x < cols:
                     break
@@ -1118,9 +1117,6 @@ class ScrollMode:
         except IndexError:
             return
 
-        def _is_word_char(ch: str) -> bool:
-            return ch.isalnum() or ch == '_'
-
         x -= 1
         while True:
             if x < 0:
@@ -1134,11 +1130,11 @@ class ScrollMode:
                 x = len(text) - 1
                 if x < 0:
                     continue
-            while x >= 0 and not _is_word_char(text[x]):
+            while x >= 0 and not self._is_word_char(text[x]):
                 x -= 1
             if x < 0:
                 continue
-            while x > 0 and _is_word_char(text[x - 1]):
+            while x > 0 and self._is_word_char(text[x - 1]):
                 x -= 1
             break
 

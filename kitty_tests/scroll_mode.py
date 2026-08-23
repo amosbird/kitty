@@ -45,6 +45,50 @@ class TestScrollMode(BaseTest):
             mode.exit()
             self.assertFalse(mode.active)
 
+    def test_entry_starts_at_terminal_cursor(self):
+        from kitty.scroll_mode import ScrollMode
+
+        class Window:
+            id = 1
+
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        screen = self.create_screen(cols=10, lines=4)
+        parse_bytes(screen, b'first\r\nabc')
+        mode = ScrollMode()
+        with patch('kitty.scroll_mode._get_tab_manager', return_value=None):
+            mode.enter(Window(screen))
+        self.assertEqual((mode._cursor_abs, mode._cursor_x), (screen.historybuf.count + screen.cursor.y, screen.cursor.x))
+
+    def test_alt_screen_is_restored_after_exit(self):
+        from kitty.scroll_mode import ScrollMode
+
+        class Window:
+            id = 1
+
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        class ChildMonitor:
+            def wakeup(self):
+                pass
+
+        class Boss:
+            child_monitor = ChildMonitor()
+
+        screen = self.create_screen(cols=10, lines=4)
+        parse_bytes(screen, b'main\x1b[?1049halt')
+        screen.cursor_position(2, 4)
+        mode = ScrollMode()
+        with patch('kitty.scroll_mode._get_tab_manager', return_value=None), patch('kitty.scroll_mode.get_boss', return_value=Boss()):
+            mode.enter(Window(screen))
+            self.assertTrue(screen.is_main_linebuf())
+            mode.exit()
+        self.assertFalse(screen.is_main_linebuf())
+        self.assertEqual(str(screen.linebuf.line(0)), 'alt')
+        self.assertEqual((screen.cursor.y, screen.cursor.x), (1, 3))
+
     def test_escape_yanks_selection_and_exits(self):
         from kitty.scroll_mode import ScrollMode, ScrollModeState
 
@@ -182,6 +226,29 @@ class TestScrollMode(BaseTest):
         self.assertTrue(mode.handle_mouse(mode._window, 0, 0))
         self.assertEqual(mode.state, ScrollModeState.SELECT)
         self.assertEqual((mode._cursor_abs, mode._cursor_x), (1, 3))
+
+    def test_word_boundaries_use_configured_characters(self):
+        from kitty.scroll_mode import ScrollMode
+
+        class Window:
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        screen = self.create_screen(cols=20, lines=2, options={'select_by_word_characters': '/:'})
+        parse_bytes(screen, b'foo/bar:baz next')
+        mode = ScrollMode()
+        mode._window = Window(screen)
+        mode._cursor_abs = 0
+        mode._cursor_x = 4
+        mode._select_word_at_cursor()
+        self.assertEqual((mode._sel_start_x, mode._cursor_x), (0, 10))
+
+        mode._sel_mode = None
+        mode._cursor_x = 0
+        mode._word_move_forward(to_end=False)
+        self.assertEqual(mode._cursor_x, 12)
+        mode._word_move_backward()
+        self.assertEqual(mode._cursor_x, 0)
 
     def test_app_mouse_tracking_takes_precedence(self):
         screen = self.create_screen(options={'scroll_mode_mouse': True})

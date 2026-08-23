@@ -181,6 +181,8 @@ Detailed list of changes
 
 - Scroll mode: make :kbd:`Escape` copy the active selection and exit, and safely buffer child output while browsing scrollback.
 
+- Scroll mode: honor configured word characters, start at the terminal cursor, and preserve alternate-screen contents and cursor position.
+
 
 0.48.2 [2026-07-30]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

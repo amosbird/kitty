@@ -5925,8 +5925,12 @@ is_main_linebuf(Screen *self, PyObject *a UNUSED) {
 }
 
 static PyObject*
-toggle_alt_screen(Screen *self, PyObject *a UNUSED) {
-    screen_toggle_screen_buffer(self, true, true);
+toggle_alt_screen(Screen *self, PyObject *args) {
+    int clear = 1, restore_alt_cursor = 0;
+    if (!PyArg_ParseTuple(args, "|pp", &clear, &restore_alt_cursor)) return NULL;
+    if (self->linebuf == self->alt_linebuf) screen_save_cursor(self);
+    screen_toggle_screen_buffer(self, true, clear);
+    if (restore_alt_cursor && self->linebuf == self->alt_linebuf) screen_restore_cursor(self);
     Py_RETURN_NONE;
 }
 
@@ -6536,7 +6540,7 @@ static PyMethodDef methods[] = {
     MND(send_escape_code_to_child, METH_VARARGS)
     MND(pause_rendering, METH_VARARGS)
     MND(hyperlink_at, METH_VARARGS)
-    MND(toggle_alt_screen, METH_NOARGS)
+    MND(toggle_alt_screen, METH_VARARGS)
     MND(reset_callbacks, METH_NOARGS)
     MND(paste, METH_O)
     MND(paste_bytes, METH_O)
