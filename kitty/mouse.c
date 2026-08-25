@@ -1588,7 +1588,9 @@ scroll_event(const GLFWScrollEvent *ev) {
                 } else {
                     fake_scroll(w, abs(s), upwards);
                 }
-                if (upwards) call_boss(scroll_mode_from_mouse, "Ki", w->id, (int)w->mouse_pos.cell_y);
+                if (upwards) call_boss(scroll_mode_from_mouse, "KiiO", w->id,
+                        (int)w->mouse_pos.cell_x, (int)w->mouse_pos.cell_y,
+                        screen->selections.in_progress ? Py_True : Py_False);
             }
         } else if (screen->modes.mouse_tracking_mode == NO_TRACKING && pixel_scroll_enabled_for_screen(screen) && (ev->offset_type == GLFW_SCROLL_OFFEST_HIGHRES || ev->offset_type == GLFW_SCROLL_OFFEST_V120)) {
             double delta_pixels;

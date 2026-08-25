@@ -138,6 +138,21 @@ class ScrollMode:
         if self._tab_manager is not None:
             self._tab_manager.mark_tab_bar_dirty()
 
+    def enter_from_mouse_scroll(self, window: 'Window', cell_x: int, cell_y: int, drag_in_progress: bool) -> None:
+        """Enter scroll mode after a mouse wheel scroll, preserving an active drag."""
+        if self.active:
+            return
+        self.enter(window)
+        if not self.active:
+            return
+        if drag_in_progress:
+            self._move_cursor_to(self._drag_press_abs, self._drag_press_x)
+            self._start_selection('char')
+            self._drag_active = self._drag_started = True
+            self._mouse_move(cell_x, cell_y)
+        else:
+            self._mouse_click(cell_x, cell_y)
+
     def exit(self) -> None:
         """Deactivate scroll mode and restore normal terminal state."""
         if self._window is not None:

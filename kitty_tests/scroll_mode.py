@@ -272,6 +272,32 @@ class TestScrollMode(BaseTest):
         mode._word_move_backward()
         self.assertEqual(mode._cursor_x, 0)
 
+    def test_mouse_scroll_entry_preserves_drag(self):
+        from kitty.scroll_mode import ScrollMode, ScrollModeState
+
+        class Window:
+            id = 1
+
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        screen = self.create_screen(cols=8, lines=3)
+        mode = ScrollMode()
+        mode._drag_press_abs = 1
+        mode._drag_press_x = 2
+        window = Window(screen)
+        screen.start_selection(2, 1)
+        screen.update_selection(4, 1, False, False)
+
+        with patch('kitty.scroll_mode._get_tab_manager', return_value=None):
+            mode.enter_from_mouse_scroll(window, 4, 1, True)
+
+        self.assertTrue(mode.active)
+        self.assertEqual(mode.state, ScrollModeState.SELECT)
+        self.assertTrue(mode._drag_active)
+        self.assertEqual((mode._sel_start_abs, mode._sel_start_x), (1, 2))
+        self.assertEqual((mode._cursor_abs, mode._cursor_x), (1, 4))
+
     def test_app_mouse_tracking_takes_precedence(self):
         screen = self.create_screen(options={'scroll_mode_mouse': True})
         parse_bytes(screen, b'\x1b[?1003h')

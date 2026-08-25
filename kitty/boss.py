@@ -1681,14 +1681,10 @@ class Boss:
             window.finish_scroll_animation()
         return False
 
-    def scroll_mode_from_mouse(self, window_id: int, cell_y: int) -> None:
+    def scroll_mode_from_mouse(self, window_id: int, cell_x: int, cell_y: int, drag_in_progress: bool) -> None:
         w = self.window_id_map.get(window_id)
         if w is not None and not w.scroll_mode.active:
-            w.scroll_mode.enter(w, silent=True)
-            if w.scroll_mode.active:
-                screen = w.screen
-                vt = screen.historybuf.count - screen.scrolled_by
-                w.scroll_mode._move_cursor_to(vt + cell_y, 0)
+            w.scroll_mode.enter_from_mouse_scroll(w, cell_x, cell_y, drag_in_progress)
 
     def scroll_mode_from_mouse_scroll(self, window_id: int, delta: int, clamped_y: int) -> None:
         w = self.window_id_map.get(window_id)
