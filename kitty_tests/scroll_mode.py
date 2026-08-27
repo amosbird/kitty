@@ -272,6 +272,62 @@ class TestScrollMode(BaseTest):
         mode._word_move_backward()
         self.assertEqual(mode._cursor_x, 0)
 
+    def test_line_boundaries_stop_at_content_then_edge(self):
+        from kitty.scroll_mode import ScrollMode
+
+        class Window:
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        screen = self.create_screen(cols=12, lines=2)
+        parse_bytes(screen, b'  content  ')
+        mode = ScrollMode()
+        mode._window = Window(screen)
+        mode.active = True
+        mode._cursor_abs = 0
+
+        mode._cursor_x = 6
+        self.assertTrue(mode.handle_key(KeyEvent(ord('0'), action=GLFW_PRESS, text='0')))
+        self.assertEqual(mode._cursor_x, 2)
+        self.assertTrue(mode.handle_key(KeyEvent(ord('0'), action=GLFW_PRESS, text='0')))
+        self.assertEqual(mode._cursor_x, 0)
+
+        mode._cursor_x = 4
+        self.assertTrue(mode.handle_key(KeyEvent(ord('$'), action=GLFW_PRESS, text='$')))
+        self.assertEqual(mode._cursor_x, 8)
+        self.assertTrue(mode.handle_key(KeyEvent(ord('$'), action=GLFW_PRESS, text='$')))
+        self.assertEqual(mode._cursor_x, screen.columns - 1)
+
+    def test_mouse_drag_continues_after_entering_scroll_mode(self):
+        from kitty.scroll_mode import ScrollMode, ScrollModeState
+
+        class Window:
+            id = 1
+            mouse_x = 2
+            mouse_y = 1
+
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+            def current_mouse_position(self):
+                return {'cell_x': self.mouse_x, 'cell_y': self.mouse_y}
+
+        screen = self.create_screen(cols=8, lines=3, options={'scroll_mode_mouse': True})
+        mode = ScrollMode()
+        window = Window(screen)
+        with patch('kitty.scroll_mode._get_tab_manager', return_value=None):
+            self.assertFalse(mode.handle_mouse(window, 0, 1))
+            window.mouse_x = 3
+            self.assertTrue(mode.handle_mouse(window, 0, 0))
+            self.assertTrue(mode.active)
+            self.assertEqual(mode.state, ScrollModeState.SELECT)
+            self.assertEqual((mode._sel_start_abs, mode._sel_start_x), (1, 2))
+            self.assertEqual((mode._cursor_abs, mode._cursor_x), (1, 3))
+
+            window.mouse_x = 5
+            self.assertTrue(mode.handle_mouse(window, 0, 0))
+            self.assertEqual((mode._cursor_abs, mode._cursor_x), (1, 5))
+
     def test_mouse_scroll_entry_preserves_drag(self):
         from kitty.scroll_mode import ScrollMode, ScrollModeState
 

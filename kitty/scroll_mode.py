@@ -674,6 +674,7 @@ class ScrollMode:
                     anchor_x = getattr(self, '_drag_press_x', 0)
                     self._move_cursor_to(anchor_abs, anchor_x)
                     self._start_selection('char')
+                    self._drag_active = self._drag_started = True
                     # Move to current drag position
                     self._mouse_move(cell_x, cell_y)
                 return True
@@ -906,16 +907,12 @@ class ScrollMode:
             self._move_cursor_to(self._total_lines - 1, 0)
             return True
 
-        # Line start/end: 0/$
+        # Line start/end: first/last non-space, then screen edge
         if key == ord('0') and not mods:
-            self._cursor_x = 0
-            self._sync_cursor()
-            self._mark_dirty()
+            self._move_to_line_boundary(start=True)
             return True
         if ev.text == '$':
-            self._cursor_x = self._window.screen.columns - 1
-            self._sync_cursor()
-            self._mark_dirty()
+            self._move_to_line_boundary(start=False)
             return True
 
         # Word movement: w/e/b
@@ -930,6 +927,19 @@ class ScrollMode:
             return True
 
         return True  # consume unknown keys
+
+    def _move_to_line_boundary(self, start: bool) -> None:
+        text = self._get_line_text(self._cursor_abs)
+        edge = 0 if start else self._window.screen.columns - 1
+        content_edge = edge
+        indices = range(len(text)) if start else range(len(text) - 1, -1, -1)
+        for i in indices:
+            if not text[i].isspace():
+                content_edge = i
+                break
+        self._cursor_x = edge if self._cursor_x == content_edge else content_edge
+        self._sync_cursor()
+        self._mark_dirty()
 
     def _handle_search(self, ev: KeyEvent) -> bool:
         """Handle key input during incremental search mode."""
