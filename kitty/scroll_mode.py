@@ -169,6 +169,7 @@ class ScrollMode:
             self._tab_manager.mark_tab_bar_dirty()
         self.active = False
         self._sel_mode = None
+        self._drag_active = self._drag_started = False
         self._window = None
         self._tab_manager = None
         # Wake up IO loop so it resumes reading from child PTY
@@ -276,12 +277,13 @@ class ScrollMode:
         if self._window is None:
             return
         screen = self._window.screen
-        h = screen.historybuf.count
         num_lines = screen.lines
-        total = h + num_lines
+        total = self._total_lines
         self._cursor_abs = max(0, min(self._cursor_abs, total - 1))
         self._cursor_x = max(0, min(self._cursor_x, screen.columns - 1))
 
+        if not screen.is_main_linebuf():
+            return
         vt = self._viewport_top()
         vb = vt + num_lines - 1
         if self._cursor_abs < vt:
@@ -650,7 +652,8 @@ class ScrollMode:
             if repeat_count == 1:
                 # Store press position for potential drag auto-enter
                 screen = window.screen
-                self._drag_press_abs = screen.historybuf.count - screen.scrolled_by + cell_y
+                viewport_top = screen.historybuf.count - screen.scrolled_by if screen.is_main_linebuf() else 0
+                self._drag_press_abs = viewport_top + cell_y
                 self._drag_press_x = cell_x
                 return False  # let normal handling proceed
             if repeat_count == 2:
@@ -717,8 +720,24 @@ class ScrollMode:
             self._mouse_move(cell_x, cell_y)
             return True
 
+        if repeat_count == -1:
+            self._drag_active = self._drag_started = False
+            return True
+
         # Release or other: consume in scroll mode
         return True
+
+    def handle_wheel_scroll(self, delta: int, clamped_y: int) -> None:
+        if self._window is None:
+            return
+        screen = self._window.screen
+        if screen.is_main_linebuf():
+            self._cursor_abs = self._viewport_top() + clamped_y
+        else:
+            self._cursor_abs -= delta
+        self._ensure_cursor_visible()
+        self._sync_cursor()
+        self._mark_dirty()
 
     def _mouse_click(self, cell_x: int, cell_y: int) -> None:
         """Move cursor to the clicked cell position."""

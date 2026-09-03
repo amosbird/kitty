@@ -1690,13 +1690,10 @@ class Boss:
         w = self.window_id_map.get(window_id)
         if w is not None and w.scroll_mode.active:
             screen = w.screen
-            if screen.scrolled_by == 0 and delta < 0:
+            if screen.scrolled_by == 0 and delta < 0 and screen.is_main_linebuf():
                 w.scroll_mode.exit()
                 return
-            vt = screen.historybuf.count - screen.scrolled_by
-            w.scroll_mode._cursor_abs = vt + clamped_y
-            w.scroll_mode._sync_cursor()
-            w.scroll_mode._mark_dirty()
+            w.scroll_mode.handle_wheel_scroll(delta, clamped_y)
 
     def cancel_current_visual_select(self) -> None:
         if self.current_visual_select:

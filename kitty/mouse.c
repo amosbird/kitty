@@ -545,6 +545,7 @@ handle_scrollbar_track_click(Window *w, double mouse_y) {
 static void
 end_drag(Window *w) {
     Screen *screen = w->render_data.screen;
+    int active_drag_button = global_state.active_drag_button;
     global_state.active_drag_in_window = 0;
     global_state.active_drag_button = -1;
     w->last_drag_scroll_at = 0;
@@ -559,7 +560,9 @@ end_drag(Window *w) {
         set_mouse_cursor(mouse_cursor_shape);
     }
 
-    if (screen->selections.in_progress) {
+    if (screen->scroll_mode.active && active_drag_button >= 0) {
+        dispatch_mouse_event(w, active_drag_button, -1, 0, false);
+    } else if (screen->selections.in_progress) {
         screen_update_selection(screen, w->mouse_pos.cell_x, w->mouse_pos.cell_y, w->mouse_pos.in_left_half_of_cell, (SelectionUpdate){.ended=true});
     }
 }
@@ -908,17 +911,21 @@ HANDLER(handle_button_event) {
     }
 
     if (screen->scroll_mode.active) {
-        if (!is_release && button >= 0 && button < (ssize_t)arraysz(w->click_queues)) {
-            ClickQueue *q = &w->click_queues[button];
-            if (q->length == CLICK_QUEUE_SZ) { memmove(q->clicks, q->clicks + 1, sizeof(Click) * (CLICK_QUEUE_SZ - 1)); q->length--; }
-            q->clicks[q->length] = (Click){.at = monotonic(), .button = button,
-                .modifiers = modifiers & ~GLFW_LOCK_MASK,
-                .x = MAX(0, w->mouse_pos.global_x), .y = MAX(0, w->mouse_pos.global_y)};
-            q->length++;
-            int count = multi_click_count(w, button);
-            if (count < 1) count = 1;
-            dispatch_mouse_event(w, button, count, modifiers, false);
-            if (count > 2 || !screen->scroll_mode.active) q->length = 0;
+        if (button >= 0) {
+            if (is_release) {
+                dispatch_mouse_event(w, button, -1, modifiers, false);
+            } else if (button < (ssize_t)arraysz(w->click_queues)) {
+                ClickQueue *q = &w->click_queues[button];
+                if (q->length == CLICK_QUEUE_SZ) { memmove(q->clicks, q->clicks + 1, sizeof(Click) * (CLICK_QUEUE_SZ - 1)); q->length--; }
+                q->clicks[q->length] = (Click){.at = monotonic(), .button = button,
+                    .modifiers = modifiers & ~GLFW_LOCK_MASK,
+                    .x = MAX(0, w->mouse_pos.global_x), .y = MAX(0, w->mouse_pos.global_y)};
+                q->length++;
+                int count = multi_click_count(w, button);
+                if (count < 1) count = 1;
+                dispatch_mouse_event(w, button, count, modifiers, false);
+                if (count > 2 || !screen->scroll_mode.active) q->length = 0;
+            }
         }
         return;
     }
@@ -1572,9 +1579,11 @@ scroll_event(const GLFWScrollEvent *ev) {
             int s = scale_scroll(NO_TRACKING, ev->y_offset, ev->offset_type, &screen->pending_scroll_pixels_y, global_state.callback_os_window->fonts_data->fcm.cell_height);
             if (s) {
                 bool upwards = s > 0;
-                screen_history_scroll(screen, abs(s), upwards);
-                if (screen->scroll_mode.y >= screen->lines) screen->scroll_mode.y = screen->lines - 1;
-                screen->is_dirty = true;
+                if (screen->linebuf == screen->main_linebuf) {
+                    screen_history_scroll(screen, abs(s), upwards);
+                    if (screen->scroll_mode.y >= screen->lines) screen->scroll_mode.y = screen->lines - 1;
+                    screen->is_dirty = true;
+                }
                 call_boss(scroll_mode_from_mouse_scroll, "KiI", w->id,
                           upwards ? abs(s) : -abs(s), screen->scroll_mode.y);
             }
@@ -1582,15 +1591,18 @@ scroll_event(const GLFWScrollEvent *ev) {
             int s = scale_scroll(NO_TRACKING, ev->y_offset, ev->offset_type, &screen->pending_scroll_pixels_y, global_state.callback_os_window->fonts_data->fcm.cell_height);
             if (s) {
                 bool upwards = s > 0;
-                if (screen->linebuf == screen->main_linebuf) {
+                bool is_main_screen = screen->linebuf == screen->main_linebuf;
+                if (is_main_screen) {
                     screen_history_scroll(screen, abs(s), upwards);
                     if (screen->selections.in_progress) update_drag(w);
-                } else {
-                    fake_scroll(w, abs(s), upwards);
                 }
-                if (upwards) call_boss(scroll_mode_from_mouse, "KiiO", w->id,
-                        (int)w->mouse_pos.cell_x, (int)w->mouse_pos.cell_y,
-                        screen->selections.in_progress ? Py_True : Py_False);
+                if (upwards) {
+                    call_boss(scroll_mode_from_mouse, "KiiO", w->id,
+                            (int)w->mouse_pos.cell_x, (int)w->mouse_pos.cell_y,
+                            screen->selections.in_progress ? Py_True : Py_False);
+                    if (!is_main_screen) return;
+                }
+                if (!is_main_screen) fake_scroll(w, abs(s), false);
             }
         } else if (screen->modes.mouse_tracking_mode == NO_TRACKING && pixel_scroll_enabled_for_screen(screen) && (ev->offset_type == GLFW_SCROLL_OFFEST_HIGHRES || ev->offset_type == GLFW_SCROLL_OFFEST_V120)) {
             double delta_pixels;

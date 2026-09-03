@@ -328,6 +328,96 @@ class TestScrollMode(BaseTest):
             self.assertTrue(mode.handle_mouse(window, 0, 0))
             self.assertEqual((mode._cursor_abs, mode._cursor_x), (1, 5))
 
+    def test_alt_screen_cursor_is_clamped_to_visible_lines(self):
+        from kitty.scroll_mode import ScrollMode
+
+        class Window:
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        screen = self.create_screen(cols=8, lines=4, scrollback=8)
+        parse_bytes(screen, b'one\r\ntwo\r\nthree\r\nfour\r\nfive\x1b[?1049halt')
+        self.assertGreater(screen.historybuf.count, 0)
+        mode = ScrollMode()
+        mode._window = Window(screen)
+        mode.active = True
+        mode._move_cursor_to(100, 2)
+        self.assertEqual((mode._cursor_abs, mode._cursor_x), (screen.lines - 1, 2))
+
+        mode.handle_wheel_scroll(1, 0)
+        self.assertEqual((mode._cursor_abs, mode._cursor_x), (screen.lines - 2, 2))
+
+    def test_mouse_drag_enters_scroll_mode_on_alt_screen(self):
+        from kitty.scroll_mode import ScrollMode, ScrollModeState
+
+        class Window:
+            id = 1
+            mouse_x = 2
+            mouse_y = 1
+
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+            def current_mouse_position(self):
+                return {'cell_x': self.mouse_x, 'cell_y': self.mouse_y}
+
+        screen = self.create_screen(cols=8, lines=4, scrollback=8, options={'scroll_mode_mouse': True})
+        parse_bytes(screen, b'one\r\ntwo\r\nthree\r\nfour\r\nfive\x1b[?1049halt')
+        mode = ScrollMode()
+        window = Window(screen)
+        with patch('kitty.scroll_mode._get_tab_manager', return_value=None):
+            self.assertFalse(mode.handle_mouse(window, 0, 1))
+            window.mouse_y = 2
+            self.assertTrue(mode.handle_mouse(window, 0, 0))
+        self.assertTrue(mode.active)
+        self.assertEqual(mode.state, ScrollModeState.SELECT)
+        self.assertEqual((mode._sel_start_abs, mode._sel_start_x), (1, 2))
+        self.assertEqual((mode._cursor_abs, mode._cursor_x), (2, 2))
+
+    def test_mouse_scroll_enters_alt_screen_without_scrolling_application(self):
+        from kitty.scroll_mode import ScrollMode
+
+        class Window:
+            id = 1
+
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+        screen = self.create_screen(cols=8, lines=4, options={'scroll_mode_mouse': True})
+        parse_bytes(screen, b'\x1b[?1049halt')
+        mode = ScrollMode()
+        window = Window(screen)
+        with patch('kitty.scroll_mode._get_tab_manager', return_value=None):
+            mode.enter_from_mouse_scroll(window, 3, 1, False)
+        self.assertTrue(mode.active)
+        self.assertFalse(screen.is_main_linebuf())
+        self.assertEqual((mode._cursor_abs, mode._cursor_x), (1, 3))
+
+    def test_mouse_release_finishes_scroll_mode_drag(self):
+        from kitty.scroll_mode import ScrollMode
+
+        class Window:
+            def __init__(self, screen: Screen):
+                self.screen = screen
+
+            def current_mouse_position(self):
+                return {'cell_x': 3, 'cell_y': 1}
+
+        mode = ScrollMode()
+        mode._window = window = Window(self.create_screen(cols=8, lines=3))
+        mode.active = mode._drag_active = mode._drag_started = True
+        self.assertTrue(mode.handle_mouse(window, 0, -1))
+        self.assertFalse(mode._drag_active)
+        self.assertFalse(mode._drag_started)
+
+        mode._drag_active = mode._drag_started = True
+        mode._window = None
+        mode._tab_manager = None
+        with patch('kitty.scroll_mode.get_boss'):
+            mode.exit()
+        self.assertFalse(mode._drag_active)
+        self.assertFalse(mode._drag_started)
+
     def test_mouse_scroll_entry_preserves_drag(self):
         from kitty.scroll_mode import ScrollMode, ScrollModeState
 

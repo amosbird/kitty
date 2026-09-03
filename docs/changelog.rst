@@ -183,6 +183,8 @@ Detailed list of changes
 
 - Scroll mode: honor configured word characters, start at the terminal cursor, hide the application cursor, and work without clearing alternate-screen applications.
 
+- Scroll mode: preserve mouse drags when entering, end them on release, and operate on the current buffer without mixing main-screen scrollback into alternate-screen applications.
+
 
 0.48.2 [2026-07-30]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
