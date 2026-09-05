@@ -1309,10 +1309,13 @@ def build_static_kittens(
         if args.verbose:
             print(shlex.join(c))
         e = os.environ.copy()
+        # kitten is deployed to remote hosts that can have an older libc. It is
+        # pure Go, so always disable cgo instead of inheriting the build host's
+        # libc dependency.
+        e['CGO_ENABLED'] = '0'
         # https://github.com/kovidgoyal/kitty/issues/6051#issuecomment-1441369828
         e.pop('PWD', None)
         if for_platform:
-            e['CGO_ENABLED'] = '0'
             e['GOOS'] = for_platform[0]
             e['GOARCH'] = for_platform[1]
         elif args.building_arch:
